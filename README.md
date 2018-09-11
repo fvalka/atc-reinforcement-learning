@@ -68,7 +68,7 @@ noise sensitive areas.
 A complex scenario could look like this:
 
 <p align="center" style="padding: 6em;">
-    <img src="images/scenario_complex.png">
+    <img src="images/complex_scenario.png">
 </p>
 
 
