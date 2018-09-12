@@ -2,7 +2,7 @@
 ## Project Proposition
 The goal is to train a neural network to perform basic Air Traffic Control Tasks through reinforcement learning. 
 
-This approach could improve throughput of a sector, noise abatement and increased efficiency through continuous 
+This approach could improve throughput of a sector, noise abatement and increase efficiency through continuous 
 climb and descend profiles, which for example could save 1-2% of fuel.[2][2]
 
 ## Approach ATC Task
