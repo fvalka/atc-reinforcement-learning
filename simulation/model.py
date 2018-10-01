@@ -1,13 +1,7 @@
 import math
 
 class Airplane:
-<<<<<<< HEAD
-    def __init__(self, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
-=======
-    _a_min = -5  # kts / sec
-    _a_max = 5  # kts / sec
-
-    def __init__(self, sim_parameters, x, y, h, phi, v):
+    def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
         """
         State of one aircraft simulated in the environment
 
@@ -17,15 +11,17 @@ class Airplane:
         :param h: Height [feet]
         :param phi: Angle of direction, between 1 and 360 degrees
         :param v: Speed [knots]
+        :param v_min: Min. speed [knots]
+        :param v_max: Max. speed [knots]
+        :param h_min: Min. speed [feet]
+        :param h_max: Max. speed [feet]        
         """
         self.sim_parameters = sim_parameters
->>>>>>> 62c3250b01165788e57f31f71d83a0d27d74f1f7
         self.x = x
         self.y = y
         self.h = h
         self.v = v
         self.phi = phi
-<<<<<<< HEAD
         if (v < v_min) or (v > v_max):
             raise ValueError("invalid velocity")
         if (h < h_min) or (h > h_max):
@@ -35,8 +31,7 @@ class Airplane:
         self.phi_dot = [-3,0,3]
         self.h_set = None
         self.v_set = None
-        self.phi_set = None
-        self.type = "no airplane defined"    
+        self.phi_set = None  
         
     def overMVA(self, MVA):
         if self.h >= MVA:
@@ -48,12 +43,6 @@ class Airplane:
         self.v_set = v_set
         self.phi_set = phi_set
         
-class Airspace:
-    def __init__(self, *area):#every area needs a MVA
-        self.areas = []
-        for i in area:
-            self.areas.append(i)
-=======
 
     def action_v(self, action_v):
         """
@@ -75,7 +64,6 @@ class Airspace:
 
         return math.abs(delta_v) >= self.sim_parameters.precision
 
-
 class SimParameters:
     def __init__(self, timestep, precision = 0.0001):
         """
@@ -86,4 +74,12 @@ class SimParameters:
         """
         self.timestep = timestep
         self.precision = precision
->>>>>>> 62c3250b01165788e57f31f71d83a0d27d74f1f7
+
+class Airspace:
+    def __init__(self, *area):
+        """
+        Defines the airspace. Areas are entered as lists of touples that form polygons. MVA is defined by a number (heigt in feet)
+        """
+        self.areas = []
+        for i in area:
+            self.areas.append(i)
