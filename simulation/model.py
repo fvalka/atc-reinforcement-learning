@@ -142,3 +142,28 @@ class Airspace:
         MVA is defined by a number (heigt in feet), pass as a list or touple equal to the number of 
         """
         self.mvas = mvas
+        
+    def find_mva(self,x,y):
+       for mva in self.mvas:
+            if mva.area.contains(shape.Point(x,y)):
+                return mva
+       raise ValueError('Outside of airspace')
+       
+    def get_mva(self,x,y):
+        self.find_mva(x,y).height
+
+class Runway:
+    def __init__(self,x,y,h,phi,airspace):
+        """
+        Defines position and orientation of the runway
+        """
+        self.x = x
+        self.y = y
+        self.airspace = airspace
+        self.h = h
+        self.phi = phi
+        airspace.find_mva(self.x,self.y)
+        
+        
+        
+        
