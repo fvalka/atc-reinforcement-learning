@@ -1,7 +1,7 @@
 import math
 import shapely.geometry as shape
 from typing import List
-
+import numpy as np
 
 class Airplane:
     def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
@@ -163,7 +163,29 @@ class Runway:
         self.h = h
         self.phi = phi
         airspace.find_mva(self.x,self.y)
+    
+class Corridor:
+    def __init__(self,runway):
+        """
+        Defines the corridor that belongs to a runway
+        """
+        def rot_matrix(phi):
+            phi = math.radians(phi)
+            return np.array([[math.cos(phi),math.sin(phi)],[-math.sin(phi),math.cos(phi)]]) 
+        self.runway = runway
+        faf_distance = 8
+        faf_angle = 45
+        faf_iaf_distance = 3
+        faf_iaf_distance_corner = faf_iaf_distance/math.cos(math.radians(faf_angle))
+        self.faf = np.array([[runway.x],[runway.y]]) + np.dot(rot_matrix(runway.phi),np.array([[0],[faf_distance]]))
+        self.corner1 = np.dot(rot_matrix(faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
+        self.corner2 = np.dot(rot_matrix(-faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
+        self.corridor_h = shape.Polygon([self.faf,self.corner1,self.corner2])
         
-        
-        
-        
+class Object():
+    pass
+
+runway = Object()
+runway.x = 5
+runway.y = 5
+runway.phi = 270
