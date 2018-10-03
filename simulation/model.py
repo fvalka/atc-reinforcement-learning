@@ -35,17 +35,18 @@ class Airplane:
         self.h_dot_max = 1000
         self.a_max = 5
         self.a_min = -5
-        self.phi_dot = [-3,0,3]
+        self.phi_dot_max = 3
+        self.phi_dot_min = 3
 
     def overMVA(self, MVA):
         if self.h >= MVA:
             return True
         else: return False
 
-    def command(self, h_set=None, v_set=None, phi_set=None):
-        self.h_set = h_set
-        self.v_set = v_set
-        self.phi_set = phi_set
+#    def command(self, h_set=None, v_set=None, phi_set=None):
+ #       self.h_set = h_set
+  #      self.v_set = v_set
+   #     self.phi_set = phi_set
         
     def action_v(self, action_v):
         """
@@ -57,9 +58,9 @@ class Airplane:
         :return: Change has been made to the self speed
         """
         if action_v < self.v_min:
-            action_v=self.v_min
+            raise ValueError("invalid speed")
         if action_v > self.v_max:
-            action_v=self.v_max     
+            raise ValueError("invalid speed")  
         delta_v = action_v - self.v
         # restrict to max acceleration, upper bound
         delta_v = min(delta_v, self.a_max * self.sim_parameters.timestep)
@@ -81,9 +82,9 @@ class Airplane:
         :return: Change has been made to the height
         """
         if action_h < self.h_min:
-            action_h=self.h_min
+            raise ValueError("invalid altitude")
         if action_h > self.h_max:
-            action_h=self.h_max           
+            raise ValueError("invalid altitude")           
         delta_h = action_h - self.h
         # restrict to max climb speed, upper bound
         delta_h = min(delta_h, self.h_dot_max * self.sim_parameters.timestep)
