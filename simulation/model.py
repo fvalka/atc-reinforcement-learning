@@ -1,5 +1,6 @@
 import math
 import shapely.geometry as shape
+from typing import List
 
 
 class Airplane:
@@ -39,17 +40,12 @@ class Airplane:
         self.phi_dot_max = 3
         self.phi_dot_min = 3
 
-    def overMVA(self, MVA):
-        if self.h >= MVA:
-            return True
-        else:
-            return False
+    def above_mva(self, mvas):
+        for mva in mvas:
+            if mva.area.contains(shape.Point(self.x, self.y)):
+                return self.h >= mva.height
+        raise ValueError('Outside of airspace')
 
-#    def command(self, h_set=None, v_set=None, phi_set=None):
- #       self.h_set = h_set
-  #      self.v_set = v_set
-   #     self.phi_set = phi_set
-        
     def action_v(self, action_v):
         """
         Updates the aircrafts state to a new target speed.
@@ -132,13 +128,15 @@ class SimParameters:
 
 
 class MinimumVectoringAltitude:
-    def __init__(self, area, MVA):
+    def __init__(self, area, height):
         self.area = area
-        self.MVA = MVA
+        self.height = height
 
 
 class Airspace:
-    def __init__(self, mvas):
+    mvas: List[MinimumVectoringAltitude]
+
+    def __init__(self, mvas: List[MinimumVectoringAltitude]):
         """
         Defines the airspace. Each area is a polygon entered as a list of touples, Pass several areas as a list or touple
         MVA is defined by a number (heigt in feet), pass as a list or touple equal to the number of 
