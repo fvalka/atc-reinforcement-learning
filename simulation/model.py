@@ -1,6 +1,7 @@
 import math
 import shapely.geometry as shape
 
+
 class Airplane:
     def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
         """
@@ -35,18 +36,19 @@ class Airplane:
         self.h_dot_max = 1000
         self.a_max = 5
         self.a_min = -5
-        self.phi_dot = [-3,0,3]
+        self.phi_dot = [-3, 0, 3]
 
     def overMVA(self, MVA):
         if self.h >= MVA:
             return True
-        else: return False
+        else:
+            return False
 
     def command(self, h_set=None, v_set=None, phi_set=None):
         self.h_set = h_set
         self.v_set = v_set
         self.phi_set = phi_set
-        
+
     def action_v(self, action_v):
         """
         Updates the aircrafts state to a new target speed.
@@ -57,9 +59,9 @@ class Airplane:
         :return: Change has been made to the self speed
         """
         if action_v < self.v_min:
-            action_v=self.v_min
+            action_v = self.v_min
         if action_v > self.v_max:
-            action_v=self.v_max     
+            action_v = self.v_max
         delta_v = action_v - self.v
         # restrict to max acceleration, upper bound
         delta_v = min(delta_v, self.a_max * self.sim_parameters.timestep)
@@ -81,9 +83,9 @@ class Airplane:
         :return: Change has been made to the height
         """
         if action_h < self.h_min:
-            action_h=self.h_min
+            action_h = self.h_min
         if action_h > self.h_max:
-            action_h=self.h_max           
+            action_h = self.h_max
         delta_h = action_h - self.h
         # restrict to max climb speed, upper bound
         delta_h = min(delta_h, self.h_dot_max * self.sim_parameters.timestep)
@@ -115,8 +117,9 @@ class Airplane:
 
         return math.abs(delta_phi) >= self.sim_parameters.precision
 
+
 class SimParameters:
-    def __init__(self, timestep, precision = 0.0001):
+    def __init__(self, timestep, precision=0.0001):
         """
         Defines the simulation parameters
 
@@ -126,18 +129,17 @@ class SimParameters:
         self.timestep = timestep
         self.precision = precision
 
-class Airspace:
+
+class MinimumVectoringAltitude:
     def __init__(self, area, MVA):
+        self.area = area
+        self.MVA = MVA
+
+
+class Airspace:
+    def __init__(self, mvas):
         """
         Defines the airspace. Each area is a polygon entered as a list of touples, Pass several areas as a list or touple
         MVA is defined by a number (heigt in feet), pass as a list or touple equal to the number of 
         """
-        if len(area) != len(MVA):
-            raise ValueError("Number of areas and MVAs need to match")
-        self.areas = []
-        for i in area:
-            i=shape.Polygon(i)
-            self.areas.append(i)
-        self.MVAs = []
-        for i in MVA:
-            self.MVAs.append(i)
+        self.mvas = mvas
