@@ -181,7 +181,21 @@ class Corridor:
         self.corner1 = np.dot(rot_matrix(faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
         self.corner2 = np.dot(rot_matrix(-faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
         self.corridor_h = shape.Polygon([self.faf,self.corner1,self.corner2])
-        
+        self.iaf = np.array([[runway.x],[runway.y]]) + np.dot(rot_matrix(runway.phi),np.array([[0],[faf_distance+faf_iaf_distance]])) 
+        faf_iaf_normal = np.dot(rot_matrix(runway.phi),np.array([[0],[1]]))
+        p = np.array([[-4,6]])
+        t=np.dot(p-self.faf,faf_iaf_normal)
+        self.proj_on_faf_iaf = self.faf + t*faf_iaf_normal
+        self.h_max_on_projection = np.linalg.norm(self.proj_on_faf_iaf-np.array([[runway.x],[runway.y]]))*math.tan(3*math.pi/180)
+    
+    def inside_corridor(self,x,y,h):
+        if self.corridor_h.contains(shape.Point(x,y)):
+            if h<=self.h_max_on_projection:
+                return True
+            else: return False
+        else: return False
+
+
 class Object():
     pass
 
