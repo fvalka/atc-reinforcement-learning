@@ -3,6 +3,8 @@ import shapely.geometry as shape
 from typing import List
 import numpy as np
 
+nautical_miles_to_feet = 6076 # ft/nm
+
 class Airplane:
     def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
         """
@@ -10,7 +12,7 @@ class Airplane:
 
         :param sim_parameters: Definition of the simulation, timestep and more
         :param x: Position in cartesian world coordinates
-        :param y: Position in cartesian world cooridantes
+        :param y: Position in cartesian world coordinates
         :param h: Height [feet]
         :param phi: Angle of direction, between 1 and 360 degrees
         :param v: Speed [knots]
@@ -138,22 +140,23 @@ class Airspace:
 
     def __init__(self, mvas: List[MinimumVectoringAltitude]):
         """
-        Defines the airspace. Each area is a polygon entered as a list of touples, Pass several areas as a list or touple
-        MVA is defined by a number (heigt in feet), pass as a list or touple equal to the number of 
+        Defines the airspace. Each area is a polygon entered as a list of tuples, Pass several areas as a list or tuple
+        MVA is defined by a number (height in feet), pass as a list or tuple equal to the number of
         """
         self.mvas = mvas
-        
-    def find_mva(self,x,y):
-       for mva in self.mvas:
-            if mva.area.contains(shape.Point(x,y)):
+
+    def find_mva(self, x, y):
+        for mva in self.mvas:
+            if mva.area.contains(shape.Point(x, y)):
                 return mva
-       raise ValueError('Outside of airspace')
-       
-    def get_mva(self,x,y):
-        self.find_mva(x,y).height
+        raise ValueError('Outside of airspace')
+
+    def get_mva(self, x, y):
+        self.find_mva(x, y).height
+
 
 class Runway:
-    def __init__(self,x,y,h,phi,airspace):
+    def __init__(self, x, y, h, phi, airspace):
         """
         Defines position and orientation of the runway
         """
@@ -162,44 +165,67 @@ class Runway:
         self.airspace = airspace
         self.h = h
         self.phi = phi
-        airspace.find_mva(self.x,self.y)
-    
+        airspace.find_mva(self.x, self.y)
+
+
 class Corridor:
-    def __init__(self,runway):
+    def __init__(self, runway):
         """
         Defines the corridor that belongs to a runway
         """
-        def rot_matrix(phi):
-            phi = math.radians(phi)
-            return np.array([[math.cos(phi),math.sin(phi)],[-math.sin(phi),math.cos(phi)]]) 
+
         self.runway = runway
         faf_distance = 8
         faf_angle = 45
         faf_iaf_distance = 3
-        faf_iaf_distance_corner = faf_iaf_distance/math.cos(math.radians(faf_angle))
-        self.faf = np.array([[runway.x],[runway.y]]) + np.dot(rot_matrix(runway.phi),np.array([[0],[faf_distance]]))
-        self.corner1 = np.dot(rot_matrix(faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
-        self.corner2 = np.dot(rot_matrix(-faf_angle),np.dot(rot_matrix(runway.phi),[[0],[faf_iaf_distance_corner]]))+self.faf
-        self.corridor_h = shape.Polygon([self.faf,self.corner1,self.corner2])
-        self.iaf = np.array([[runway.x],[runway.y]]) + np.dot(rot_matrix(runway.phi),np.array([[0],[faf_distance+faf_iaf_distance]])) 
-        faf_iaf_normal = np.dot(rot_matrix(runway.phi),np.array([[0],[1]]))
-        p = np.array([[-4,6]])
-        t=np.dot(p-self.faf,faf_iaf_normal)
-        self.proj_on_faf_iaf = self.faf + t*faf_iaf_normal
-        self.h_max_on_projection = np.linalg.norm(self.proj_on_faf_iaf-np.array([[runway.x],[runway.y]]))*math.tan(3*math.pi/180)
-    
-    def inside_corridor(self,x,y,h):
-        if self.corridor_h.contains(shape.Point(x,y)):
-            if h<=self.h_max_on_projection:
-                return True
-            else: return False
-        else: return False
+        faf_iaf_distance_corner = faf_iaf_distance / math.cos(math.radians(faf_angle))
+        self.faf = np.array([[runway.x], [runway.y]]) + np.dot(self.rot_matrix(runway.phi), np.array([[0], [faf_distance]]))
+        self.corner1 = np.dot(self.rot_matrix(faf_angle),
+                              np.dot(self.rot_matrix(runway.phi), [[0], [faf_iaf_distance_corner]])) + self.faf
+        self.corner2 = np.dot(self.rot_matrix(-faf_angle),
+                              np.dot(self.rot_matrix(runway.phi), [[0], [faf_iaf_distance_corner]])) + self.faf
+        self.corridor_horizontal = shape.Polygon([self.faf, self.corner1, self.corner2])
+        self.iaf = np.array([[runway.x], [runway.y]]) + np.dot(self.rot_matrix(runway.phi),
+                                                               np.array([[0], [faf_distance + faf_iaf_distance]]))
+        self.corridor1 = shape.Polygon([self.faf, self.corner1, self.iaf])
+        self.corridor2 = shape.Polygon([self.faf, self.corner2, self.iaf])
+
+    def inside_corridor(self, x, y, h, phi):
+        faf_iaf_normal = np.dot(self.rot_matrix(runway.phi), np.array([[0], [1]]))
+        p = np.array([[x, y]])
+        t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
+        projection_on_faf_iaf = self.faf + t * faf_iaf_normal
+        h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[runway.x], [runway.y]])) * \
+                              math.tan(3 * math.pi / 180) * nautical_miles_to_feet + runway.h
+
+        direction_correct = False
+        # FIXME: Angle calculation is wrong! Currently only the relative difference is calculated. Needs to be absolute
+        # but consider angles which cross over 360 degrees
+        if self.corridor1.intersects(shape.Point(x, y)) and 0 <= 360-np.abs(np.abs(runway.phi - phi)-360) <= 45:
+            direction_correct = True
+        elif self.corridor2.intersects(shape.Point(x, y)) and 0 >= 360-np.abs(np.abs(runway.phi - phi)-360) >= -45:
+            direction_correct = True
+
+        return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
+
+
+    @staticmethod
+    def rot_matrix(phi):
+        phi = math.radians(phi)
+        return np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
+
 
 
 class Object():
     pass
 
+
 runway = Object()
 runway.x = 5
 runway.y = 5
+runway.h = 0
 runway.phi = 270
+
+A=Corridor(runway)
+print(A.inside_corridor(-4,5,1000, 280))
+print(A.inside_corridor(-4,5,1000, 260))
