@@ -152,7 +152,7 @@ class Airspace:
         raise ValueError('Outside of airspace')
 
     def get_mva(self, x, y):
-        self.find_mva(x, y).height
+        return self.find_mva(x, y).height
 
 
 class Runway:
