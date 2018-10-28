@@ -12,6 +12,14 @@ class MyTestCase(unittest.TestCase):
         test_airspace = self.generate_airspace(test_mvas)
         z = test_airspace.get_mva(x, y)
         self.assertEqual(z, 3500)
+        test_runway = self.generate_runway(test_airspace)
+        test_corridor = self.generate_corridor(test_runway)
+        x = 20
+        y = 10
+        h = 1000
+        phi = 180
+        zz = test_corridor.inside_corridor(x, y, h, phi)
+        self.assertEqual(zz, False)
 
     def generate_mvas(self):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
@@ -26,6 +34,17 @@ class MyTestCase(unittest.TestCase):
         airspace = model.Airspace(mvas)
         return airspace
 
+    def generate_runway(self, airspace):
+        x = 20
+        y = 20
+        h = 0
+        phi = 180        
+        runway = model.Runway(x, y, h, phi, airspace)
+        return runway
+    
+    def generate_corridor(self, runway):
+        corridor = model.Corridor(runway)
+        return corridor
 
 if __name__ == '__main__':
     unittest.main()
