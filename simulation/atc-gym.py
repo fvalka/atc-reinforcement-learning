@@ -15,7 +15,6 @@ class AtcGym(gym.Env):
 
         self._sim_parameters = model.SimParameters(1)
 
-        # Box(low=np.array([-1.0,-2.0]), high=np.array([2.0,4.0])) # low and high are arrKays of the same shape
         # action space structure: v, h, phi
         self.action_space = gym.spaces.Box(low=np.array([100, 0, 0]),
                                            high=np.array([300, 40000, 360 - self._sim_parameters.precision]))
