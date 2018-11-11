@@ -202,36 +202,33 @@ class Corridor:
         p = np.array([[x, y]])
         t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
         projection_on_faf_iaf = self.faf + t * faf_iaf_normal
-        h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[runway.x], [runway.y]])) * \
-                              math.tan(3 * math.pi / 180) * nautical_miles_to_feet + runway.h
+        h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[self.runway.x], [self.runway.y]])) * \
+                              math.tan(3 * math.pi / 180) * nautical_miles_to_feet + self.runway.h
 
+        direction_correct = self._inside_corridor_angle(x, y, h, phi)
+
+        return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
+
+    def _inside_corridor_angle(self, x, y, h, phi):
         direction_correct = False
         # FIXME: Angle calculation is wrong! Currently only the relative difference is calculated. Needs to be absolute
         # but consider angles which cross over 360 degrees
-        if self.corridor1.intersects(shape.Point(x, y)) and 0 <= 360-np.abs(np.abs(runway.phi - phi)-360) <= 45:
+
+        beta = self.faf_angle - np.arccos(
+                np.dot(
+                        np.transpose(np.dot(self.rot_matrix(self.runway.phi+180), np.array([[0], [1]]))),np.dot(self.rot_matrix(phi), np.array([[0], [1]]))
+                        )
+                )
+
+        if self.corridor1.intersects(shape.Point(x, y)) and self.runway.phi+self.faf_angle <= phi <= self.runway.phi+self.faf_angle-beta:
             direction_correct = True
-        elif self.corridor2.intersects(shape.Point(x, y)) and 0 >= 360-np.abs(np.abs(runway.phi - phi)-360) >= -45:
+        elif self.corridor2.intersects(shape.Point(x, y)) and self.runway.phi-self.faf_angle <= phi <= self.runway.phi-self.faf_angle+beta:
             direction_correct = True
 
-        return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
+        return direction_correct
 
 
 def rot_matrix(phi):
     phi = math.radians(phi)
     return np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
 
-
-
-class Object():
-    pass
-
-
-runway = Object()
-runway.x = 5
-runway.y = 5
-runway.h = 0
-runway.phi = 270
-
-A=Corridor(runway)
-print(A.inside_corridor(-4,5,1000, 280))
-print(A.inside_corridor(-4,5,1000, 260))
