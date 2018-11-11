@@ -44,7 +44,7 @@ class AtcGym(gym.Env):
         :return:
         """
         done = False
-        reward = 0
+        reward = -0.001
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
@@ -74,8 +74,11 @@ class AtcGym(gym.Env):
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf
         # FIXME calculate relative angle to FAF phi_rel_faf
+        d_faf = math.sqrt(math.pow(self._corridor.faf[0] - self._airplane.x, 2) +
+                          math.pow(self._corridor.faf[1] - self._airplane.y, 2))
+
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
-                          self._airplane.v, self._airplane.h - mva, 0.0, 0.0], dtype=np.float32)
+                          self._airplane.v, self._airplane.h - mva, d_faf, 0.0], dtype=np.float32)
 
         return state, reward, done, {}
 
@@ -84,13 +87,17 @@ class AtcGym(gym.Env):
         try:
             action_taken = func(action)
             if action_taken:
-                return -0.001
+                return -0.01
         except ValueError:
-            return -0.01
+            # invalid action, outside of permissible range
+            return -0.1
+        return 0.0
 
     def reset(self):
         """
         Reset the environment
+
+        Creates a new airplane instance
         :return:
         """
 
