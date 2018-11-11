@@ -198,7 +198,7 @@ class Corridor:
         self.corridor2 = shape.Polygon([self.faf, self.corner2, self.iaf])
 
     def inside_corridor(self, x, y, h, phi):
-        faf_iaf_normal = np.dot(rot_matrix(runway.phi), np.array([[0], [1]]))
+        faf_iaf_normal = np.dot(rot_matrix(self.runway.phi), np.array([[0], [1]]))
         p = np.array([[x, y]])
         t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
         projection_on_faf_iaf = self.faf + t * faf_iaf_normal
@@ -216,7 +216,7 @@ class Corridor:
 
         beta = self.faf_angle - np.arccos(
                 np.dot(
-                        np.transpose(np.dot(self.rot_matrix(self.runway.phi+180), np.array([[0], [1]]))),np.dot(self.rot_matrix(phi), np.array([[0], [1]]))
+                        np.transpose(np.dot(rot_matrix(self.runway.phi+180), np.array([[0], [1]]))),np.dot(rot_matrix(phi), np.array([[0], [1]]))
                         )
                 )
 
