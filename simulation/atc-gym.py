@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import gym
 import gym.spaces
 import simulation.model as model
@@ -19,6 +20,13 @@ class AtcGym(gym.Env):
         self.action_space = gym.spaces.Box(low=np.array([100, 0, 0]),
                                            high=np.array([300, 40000, 360 - self._sim_parameters.precision]))
 
+        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf
+        self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0]),
+                                                high=np.array([50, 50, 36000, 360, 400, 36000, 50, 360]))
+
+        self.reward = 1.0
+        self.reward_range = (-100.0, 100.0)
+
     def seed(self, seed=None):
         """
         Seeds the environments pseudo random number generator
@@ -30,7 +38,55 @@ class AtcGym(gym.Env):
         return [seed]
 
     def step(self, action):
-        pass
+        """
+
+        :param action: Action in format: v, h, phi
+        :return:
+        """
+        done = False
+        reward = 0
+
+        assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
+
+        reward += self._action_with_reward(self._airplane.action_v, action[0])
+        reward += self._action_with_reward(self._airplane.action_h, action[1])
+        reward += self._action_with_reward(self._airplane.action_phi, action[2])
+
+        self._airplane.step()
+
+        # check that the plane is above the MVA (minimum vectoring altitude)
+        try:
+            mva = self._airspace.get_mva(self._airplane.x, self._airplane.y)
+
+            if self._airplane.h < mva:
+                done = True
+                reward = -100
+        except ValueError:
+            # Airplane has left the airspace
+            done = True
+            reward = -100
+            mva = 0  # dummy value outside of range so that the MVA is set for the last state
+
+        if self._corridor.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
+            # GAME WON!
+            reward = 100
+            done = True
+
+        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf
+        # FIXME calculate relative angle to FAF phi_rel_faf
+        state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
+                          self._airplane.v, self._airplane.h - mva, 0.0, 0.0], dtype=np.float32)
+
+        return state, reward, done, {}
+
+    @staticmethod
+    def _action_with_reward(func, action):
+        try:
+            action_taken = func(action)
+            if action_taken:
+                return -0.001
+        except ValueError:
+            return -0.01
 
     def reset(self):
         """
@@ -45,6 +101,11 @@ class AtcGym(gym.Env):
         Rendering the environments state
         """
         pass
+
+    def close(self):
+        if self.viewer is not None:
+            self.viewer.close()
+            self.viewer = None
 
     def _generate_mvas(self):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
