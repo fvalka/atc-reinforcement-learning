@@ -13,7 +13,7 @@ class MyTestCase(unittest.TestCase):
         z = test_airspace.get_mva(x, y)
         self.assertEqual(z, 3500)
         
-    def test_inside_corrodidor(self): 
+    def test_inside_corrodidor_true_when_on_correct_side(self):
         test_mvas = self.generate_mvas()
         test_airspace = self.generate_airspace(test_mvas)
         test_runway = self.generate_runway(test_airspace)
@@ -22,8 +22,52 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 30
-        zz = test_corridor._inside_corridor_angle(x, y, h, phi)
-        self.assertEqual(zz, True)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), True)
+
+    def test_inside_corrodidor_false_when_on_wrong_side(self):
+        test_mvas = self.generate_mvas()
+        test_airspace = self.generate_airspace(test_mvas)
+        test_runway = self.generate_runway(test_airspace)
+        test_corridor = self.generate_corridor(test_runway)
+        x = 21
+        y = 10
+        h = 0
+        phi = 30
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+
+    def test_inside_corrodidor_false_when_on_wrong_side_other_side(self):
+        test_mvas = self.generate_mvas()
+        test_airspace = self.generate_airspace(test_mvas)
+        test_runway = self.generate_runway(test_airspace)
+        test_corridor = self.generate_corridor(test_runway)
+        x = 19
+        y = 10
+        h = 0
+        phi = 340
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+
+    def test_inside_corrodidor_false_when_on_opposite_direction(self):
+        test_mvas = self.generate_mvas()
+        test_airspace = self.generate_airspace(test_mvas)
+        test_runway = self.generate_runway(test_airspace)
+        test_corridor = self.generate_corridor(test_runway)
+        x = 19
+        y = 10
+        h = 0
+        phi = 190
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+
+    def test_inside_corridor_true_when_on_other_correct_side(self):
+        test_mvas = self.generate_mvas()
+        test_airspace = self.generate_airspace(test_mvas)
+        test_runway = self.generate_runway(test_airspace)
+        test_corridor = self.generate_corridor(test_runway)
+        x = 21
+        y = 10
+        h = 0
+        phi = 340
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), True)
+
 
     def generate_mvas(self):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)

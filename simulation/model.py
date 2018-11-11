@@ -184,6 +184,7 @@ class Corridor:
         self.runway = runway
         faf_distance = 8
         faf_angle = 45
+        self.faf_angle = faf_angle
         faf_iaf_distance = 3
         faf_iaf_distance_corner = faf_iaf_distance / math.cos(math.radians(faf_angle))
         self.faf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi), np.array([[0], [faf_distance]]))
@@ -205,24 +206,27 @@ class Corridor:
         h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[self.runway.x], [self.runway.y]])) * \
                               math.tan(3 * math.pi / 180) * nautical_miles_to_feet + self.runway.h
 
-        direction_correct = self._inside_corridor_angle(x, y, h, phi)
+        direction_correct = self._inside_corridor_angle(x, y, phi)
 
         return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
 
-    def _inside_corridor_angle(self, x, y, h, phi):
+    def _inside_corridor_angle(self, x, y, phi):
+        def relative_angle(angle1, angle2):
+            return (angle2 - angle1 + 180) % 360 - 180
+
         direction_correct = False
-        # FIXME: Angle calculation is wrong! Currently only the relative difference is calculated. Needs to be absolute
-        # but consider angles which cross over 360 degrees
 
+        to_runway = (self.runway.phi + 180) % 360
         beta = self.faf_angle - np.arccos(
-                np.dot(
-                        np.transpose(np.dot(rot_matrix(self.runway.phi+180), np.array([[0], [1]]))),np.dot(rot_matrix(phi), np.array([[0], [1]]))
-                        )
-                )
-
-        if self.corridor1.intersects(shape.Point(x, y)) and self.runway.phi+self.faf_angle <= phi <= self.runway.phi+self.faf_angle-beta:
+            np.dot(
+                np.transpose(np.dot(rot_matrix(to_runway), np.array([[0], [1]]))),
+                np.dot(rot_matrix(phi), np.array([[0], [1]]))
+            )
+        )[0][0]
+        min_angle = self.faf_angle - beta
+        if self.corridor1.intersects(shape.Point(x, y)) and min_angle <= relative_angle(to_runway, phi) <= self.faf_angle:
             direction_correct = True
-        elif self.corridor2.intersects(shape.Point(x, y)) and self.runway.phi-self.faf_angle <= phi <= self.runway.phi-self.faf_angle+beta:
+        elif self.corridor2.intersects(shape.Point(x, y)) and min_angle <= relative_angle(phi, to_runway) <= self.faf_angle:
             direction_correct = True
 
         return direction_correct
