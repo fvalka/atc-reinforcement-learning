@@ -1,3 +1,4 @@
 [
-  "model_test.py::MyTestCase::test_airspace_get_mvas"
+  "model_test.py::MyTestCase::test_airspace_get_mvas",
+  "model_test.py::MyTestCase::test_inside_corrodidor"
 ]

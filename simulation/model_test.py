@@ -12,14 +12,18 @@ class MyTestCase(unittest.TestCase):
         test_airspace = self.generate_airspace(test_mvas)
         z = test_airspace.get_mva(x, y)
         self.assertEqual(z, 3500)
+        
+    def test_inside_corrodidor(self): 
+        test_mvas = self.generate_mvas()
+        test_airspace = self.generate_airspace(test_mvas)
         test_runway = self.generate_runway(test_airspace)
         test_corridor = self.generate_corridor(test_runway)
-        x = 20
+        x = 19
         y = 10
-        h = 1000
-        phi = 180
-        zz = test_corridor.inside_corridor(x, y, h, phi)
-        self.assertEqual(zz, False)
+        h = 0
+        phi = 30
+        zz = test_corridor._inside_corridor_angle(x, y, h, phi)
+        self.assertEqual(zz, True)
 
     def generate_mvas(self):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
