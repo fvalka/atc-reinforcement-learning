@@ -3,7 +3,8 @@ import shapely.geometry as shape
 from typing import List
 import numpy as np
 
-nautical_miles_to_feet = 6076 # ft/nm
+nautical_miles_to_feet = 6076  # ft/nm
+
 
 class Airplane:
     def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
@@ -118,7 +119,7 @@ class Airplane:
 
     def step(self):
         # convert speed vector to nautical miles per second
-        v_unrotated = np.array([[0], [(self.v/3600) * self.sim_parameters.timestep]])
+        v_unrotated = np.array([[0], [(self.v / 3600) * self.sim_parameters.timestep]])
         delta_x_y = np.dot(rot_matrix(self.phi), v_unrotated)
         self.x += delta_x_y[0]
         self.y += delta_x_y[1]
@@ -163,7 +164,7 @@ class Airspace:
 
 
 class Runway:
-    def __init__(self, x, y, h, phi, airspace):
+    def __init__(self, x, y, h, phi, airspace: Airspace):
         """
         Defines position and orientation of the runway
         """
@@ -171,12 +172,13 @@ class Runway:
         self.y = y
         self.airspace = airspace
         self.h = h
-        self.phi = phi
+        self.phi_from_runway = phi
+        self.phi_to_runway = (phi + 180) % 360
         airspace.find_mva(self.x, self.y)
 
 
 class Corridor:
-    def __init__(self, runway):
+    def __init__(self, runway: Runway):
         """
         Defines the corridor that belongs to a runway
         """
@@ -187,19 +189,19 @@ class Corridor:
         self.faf_angle = faf_angle
         faf_iaf_distance = 3
         faf_iaf_distance_corner = faf_iaf_distance / math.cos(math.radians(faf_angle))
-        self.faf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi), np.array([[0], [faf_distance]]))
+        self.faf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi_from_runway), np.array([[0], [faf_distance]]))
         self.corner1 = np.dot(rot_matrix(faf_angle),
-                              np.dot(rot_matrix(runway.phi), [[0], [faf_iaf_distance_corner]])) + self.faf
+                              np.dot(rot_matrix(runway.phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
         self.corner2 = np.dot(rot_matrix(-faf_angle),
-                              np.dot(rot_matrix(runway.phi), [[0], [faf_iaf_distance_corner]])) + self.faf
+                              np.dot(rot_matrix(runway.phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
         self.corridor_horizontal = shape.Polygon([self.faf, self.corner1, self.corner2])
-        self.iaf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi),
+        self.iaf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi_from_runway),
                                                                np.array([[0], [faf_distance + faf_iaf_distance]]))
         self.corridor1 = shape.Polygon([self.faf, self.corner1, self.iaf])
         self.corridor2 = shape.Polygon([self.faf, self.corner2, self.iaf])
 
     def inside_corridor(self, x, y, h, phi):
-        faf_iaf_normal = np.dot(rot_matrix(self.runway.phi), np.array([[0], [1]]))
+        faf_iaf_normal = np.dot(rot_matrix(self.runway.phi_from_runway), np.array([[0], [1]]))
         p = np.array([[x, y]])
         t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
         projection_on_faf_iaf = self.faf + t * faf_iaf_normal
@@ -211,12 +213,10 @@ class Corridor:
         return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
 
     def _inside_corridor_angle(self, x, y, phi):
-        def relative_angle(angle1, angle2):
-            return (angle2 - angle1 + 180) % 360 - 180
 
         direction_correct = False
 
-        to_runway = (self.runway.phi + 180) % 360
+        to_runway = self.runway.phi_to_runway
         beta = self.faf_angle - np.arccos(
             np.dot(
                 np.transpose(np.dot(rot_matrix(to_runway), np.array([[0], [1]]))),
@@ -224,15 +224,20 @@ class Corridor:
             )
         )[0][0]
         min_angle = self.faf_angle - beta
-        if self.corridor1.intersects(shape.Point(x, y)) and min_angle <= relative_angle(to_runway, phi) <= self.faf_angle:
+        if self.corridor1.intersects(shape.Point(x, y)) and min_angle <= relative_angle(to_runway,
+                                                                                        phi) <= self.faf_angle:
             direction_correct = True
-        elif self.corridor2.intersects(shape.Point(x, y)) and min_angle <= relative_angle(phi, to_runway) <= self.faf_angle:
+        elif self.corridor2.intersects(shape.Point(x, y)) and min_angle <= relative_angle(phi,
+                                                                                          to_runway) <= self.faf_angle:
             direction_correct = True
 
         return direction_correct
 
 
+def relative_angle(angle1, angle2):
+    return (angle2 - angle1 + 180) % 360 - 180
+
+
 def rot_matrix(phi):
     phi = math.radians(phi)
     return np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])
-

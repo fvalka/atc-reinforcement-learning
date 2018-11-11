@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 import math
 import gym
@@ -20,11 +22,10 @@ class AtcGym(gym.Env):
         self.action_space = gym.spaces.Box(low=np.array([100, 0, 0]),
                                            high=np.array([300, 40000, 360 - self._sim_parameters.precision]))
 
-        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf
-        self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0]),
-                                                high=np.array([50, 50, 36000, 360, 400, 36000, 50, 360]))
+        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
+        self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                                                high=np.array([50, 50, 36000, 360, 400, 36000, 50, 360, 360]))
 
-        self.reward = 1.0
         self.reward_range = (-100.0, 100.0)
 
     def seed(self, seed=None):
@@ -72,13 +73,17 @@ class AtcGym(gym.Env):
             reward = 100
             done = True
 
-        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf
+        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         # FIXME calculate relative angle to FAF phi_rel_faf
-        d_faf = math.sqrt(math.pow(self._corridor.faf[0] - self._airplane.x, 2) +
-                          math.pow(self._corridor.faf[1] - self._airplane.y, 2))
+        to_faf_x = self._corridor.faf[0] - self._airplane.x
+        to_faf_y = self._corridor.faf[1] - self._airplane.y
+        d_faf = np.hypot(to_faf_x, to_faf_y)
+        phi_rel_faf = np.arctan2(to_faf_y, to_faf_x)
+        phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
 
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
-                          self._airplane.v, self._airplane.h - mva, d_faf, 0.0], dtype=np.float32)
+                          self._airplane.v, self._airplane.h - mva, d_faf, phi_rel_faf, phi_rel_runway],
+                         dtype=np.float32)
 
         return state, reward, done, {}
 
@@ -114,7 +119,7 @@ class AtcGym(gym.Env):
             self.viewer.close()
             self.viewer = None
 
-    def _generate_mvas(self):
+    def _generate_mvas(self) -> List[model.MinimumVectoringAltitude]:
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
         mva_2 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 26), (35, 30), (15, 30), (15, 27.8)]), 2400)
         mva_3 = model.MinimumVectoringAltitude(shape.Polygon([(15, 30), (35, 30), (35, 40), (15, 40)]), 4000)
@@ -123,11 +128,11 @@ class AtcGym(gym.Env):
         mvas = [mva_1, mva_2, mva_3, mva_4, mva_5]
         return mvas
 
-    def _generate_airspace(self, mvas):
+    def _generate_airspace(self, mvas: List[model.MinimumVectoringAltitude]) -> model.Airspace:
         airspace = model.Airspace(mvas)
         return airspace
 
-    def _generate_runway(self, airspace):
+    def _generate_runway(self, airspace: model.Airspace) -> model.Runway:
         x = 20
         y = 20
         h = 0
@@ -135,7 +140,7 @@ class AtcGym(gym.Env):
         runway = model.Runway(x, y, h, phi, airspace)
         return runway
 
-    def _generate_corridor(self, runway):
+    def _generate_corridor(self, runway: model.Runway) -> model.Corridor:
         corridor = model.Corridor(runway)
         return corridor
 

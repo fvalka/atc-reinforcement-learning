@@ -22,7 +22,7 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 30
-        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), True)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, phi), True)
 
     def test_inside_corrodidor_false_when_on_wrong_side(self):
         test_mvas = self.generate_mvas()
@@ -33,7 +33,7 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 30
-        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, phi), False)
 
     def test_inside_corrodidor_false_when_on_wrong_side_other_side(self):
         test_mvas = self.generate_mvas()
@@ -44,7 +44,7 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 340
-        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, phi), False)
 
     def test_inside_corrodidor_false_when_on_opposite_direction(self):
         test_mvas = self.generate_mvas()
@@ -55,7 +55,7 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 190
-        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), False)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, phi), False)
 
     def test_inside_corridor_true_when_on_other_correct_side(self):
         test_mvas = self.generate_mvas()
@@ -66,7 +66,7 @@ class MyTestCase(unittest.TestCase):
         y = 10
         h = 0
         phi = 340
-        self.assertEqual(test_corridor._inside_corridor_angle(x, y, h, phi), True)
+        self.assertEqual(test_corridor._inside_corridor_angle(x, y, phi), True)
 
 
     def generate_mvas(self):
