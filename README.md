@@ -71,8 +71,30 @@ A complex scenario could look like this:
     <img src="images/complex_scenario.png">
 </p>
 
+## Implementation
 
-## Implementation Ideas
+The implementation consists of a simulation of the air traffic control task, with models for the airplane, 
+minimum vectoring altitudes, airspace, and runway. 
+
+A second part is implemented for applying different reinforcement learning algorithms for optimizing the 
+implemented simulation. 
+
+This approach provides a defined interface, based upon the OpenAI Gym implementation which can be plugged
+into different RL algorithms for evaluating the performance of different RL algorithms on this task. 
+
+### Structure
+
+OpenAIs Gym Env is used as the interface between the simulation and RL algorithms. 
+
+<p align="center" style="padding: 6em;">
+    <img src="images/class-structure.png">
+</p>
+
+### Graphics Rendering
+The 2D rendering of the current simulation state is based upon the OpenAI Gyms' rendering 
+library which used pyglet as its graphics backend. 
+
+## Original Implementation Ideas
 
 The implementation can be split into two major parts: The simulation and the neural network. 
 
