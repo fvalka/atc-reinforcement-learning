@@ -1,12 +1,12 @@
 from typing import List
 
-import numpy as np
-import math
 import gym
 import gym.spaces
-import simulation.model as model
-from gym.utils import seeding
+import numpy as np
 import shapely.geometry as shape
+from gym.utils import seeding
+
+import simulation.model as model
 
 
 class AtcGym(gym.Env):
@@ -27,6 +27,8 @@ class AtcGym(gym.Env):
                                                 high=np.array([50, 50, 36000, 360, 400, 36000, 50, 360, 360]))
 
         self.reward_range = (-100.0, 100.0)
+
+        self.reset()
 
     def seed(self, seed=None):
         """
@@ -57,7 +59,7 @@ class AtcGym(gym.Env):
 
         # check that the plane is above the MVA (minimum vectoring altitude)
         try:
-            mva = self._airspace.get_mva(self._airplane.x, self._airplane.y)
+            mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
 
             if self._airplane.h < mva:
                 done = True
@@ -112,6 +114,13 @@ class AtcGym(gym.Env):
         """
         Rendering the environments state
         """
+        screen_width = 600
+        screen_height = 600
+
+
+
+
+
         pass
 
     def close(self):

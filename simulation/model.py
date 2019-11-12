@@ -1,6 +1,7 @@
 import math
-import shapely.geometry as shape
-from typing import List
+import shapely.geometry as geom
+import shapely.ops
+from typing import List, Any
 import numpy as np
 
 nautical_miles_to_feet = 6076  # ft/nm
@@ -45,7 +46,7 @@ class Airplane:
 
     def above_mva(self, mvas):
         for mva in mvas:
-            if mva.area.contains(shape.Point(self.x, self.y)):
+            if mva.area.contains(geom.Point(self.x, self.y)):
                 return self.h >= mva.height
         raise ValueError('Outside of airspace')
 
@@ -104,7 +105,7 @@ class Airplane:
         The target course will be bound by [phi_dot_min, phi_dot_max]
 
         :param action_phi: New target course of the aircraft
-        :return: Change has been made to the height
+        :return: Change has been made to the target heading
         """
         delta_phi = action_phi - self.phi
         # restrict to max climb speed, upper bound
@@ -137,86 +138,58 @@ class SimParameters:
         self.precision = precision
 
 
-class MinimumVectoringAltitude:
-    def __init__(self, area, height):
-        self.area = area
-        self.height = height
-
-
-class Airspace:
-    mvas: List[MinimumVectoringAltitude]
-
-    def __init__(self, mvas: List[MinimumVectoringAltitude]):
-        """
-        Defines the airspace. Each area is a polygon entered as a list of tuples, Pass several areas as a list or tuple
-        MVA is defined by a number (height in feet), pass as a list or tuple equal to the number of
-        """
-        self.mvas = mvas
-
-    def find_mva(self, x, y):
-        for mva in self.mvas:
-            if mva.area.contains(shape.Point(x, y)):
-                return mva
-        raise ValueError('Outside of airspace')
-
-    def get_mva(self, x, y):
-        return self.find_mva(x, y).height
-
-
-class Runway:
-    def __init__(self, x, y, h, phi, airspace: Airspace):
-        """
-        Defines position and orientation of the runway
-        """
-        self.x = x
-        self.y = y
-        self.airspace = airspace
-        self.h = h
-        self.phi_from_runway = phi
-        self.phi_to_runway = (phi + 180) % 360
-        airspace.find_mva(self.x, self.y)
-
-
 class Corridor:
-    def __init__(self, runway: Runway):
+    x: int
+    y: int
+    h: int
+    phi_from_runway: int
+    phi_to_runway: int
+
+    def __init__(self, x: int, y: int, h: int, phi_from_runway: int):
         """
         Defines the corridor that belongs to a runway
         """
 
-        self.runway = runway
+        self.x = x
+        self.y = y
+        self.h = h
+        self.phi_from_runway = phi_from_runway
+        self.phi_to_runway = (phi_from_runway + 180) % 360
+
         faf_distance = 8
         faf_angle = 45
         self.faf_angle = faf_angle
         faf_iaf_distance = 3
         faf_iaf_distance_corner = faf_iaf_distance / math.cos(math.radians(faf_angle))
-        self.faf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi_from_runway), np.array([[0], [faf_distance]]))
+        self.faf = np.array([[x], [y]]) + np.dot(rot_matrix(phi_from_runway),
+                                                 np.array([[0], [faf_distance]]))
         self.corner1 = np.dot(rot_matrix(faf_angle),
-                              np.dot(rot_matrix(runway.phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
+                              np.dot(rot_matrix(phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
         self.corner2 = np.dot(rot_matrix(-faf_angle),
-                              np.dot(rot_matrix(runway.phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
-        self.corridor_horizontal = shape.Polygon([self.faf, self.corner1, self.corner2])
-        self.iaf = np.array([[runway.x], [runway.y]]) + np.dot(rot_matrix(runway.phi_from_runway),
-                                                               np.array([[0], [faf_distance + faf_iaf_distance]]))
-        self.corridor1 = shape.Polygon([self.faf, self.corner1, self.iaf])
-        self.corridor2 = shape.Polygon([self.faf, self.corner2, self.iaf])
+                              np.dot(rot_matrix(phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
+        self.corridor_horizontal = geom.Polygon([self.faf, self.corner1, self.corner2])
+        self.iaf = np.array([[x], [y]]) + np.dot(rot_matrix(phi_from_runway),
+                                                 np.array([[0], [faf_distance + faf_iaf_distance]]))
+        self.corridor1 = geom.Polygon([self.faf, self.corner1, self.iaf])
+        self.corridor2 = geom.Polygon([self.faf, self.corner2, self.iaf])
 
     def inside_corridor(self, x, y, h, phi):
-        faf_iaf_normal = np.dot(rot_matrix(self.runway.phi_from_runway), np.array([[0], [1]]))
+        faf_iaf_normal = np.dot(rot_matrix(self.phi_from_runway), np.array([[0], [1]]))
         p = np.array([[x, y]])
         t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
         projection_on_faf_iaf = self.faf + t * faf_iaf_normal
-        h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[self.runway.x], [self.runway.y]])) * \
-                              math.tan(3 * math.pi / 180) * nautical_miles_to_feet + self.runway.h
+        h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[self.x], [self.y]])) * \
+                              math.tan(3 * math.pi / 180) * nautical_miles_to_feet + self.h
 
         direction_correct = self._inside_corridor_angle(x, y, phi)
 
-        return self.corridor_horizontal.intersects(shape.Point(x, y)) and h <= h_max_on_projection and direction_correct
+        return self.corridor_horizontal.intersects(geom.Point(x, y)) and h <= h_max_on_projection and direction_correct
 
     def _inside_corridor_angle(self, x, y, phi):
 
         direction_correct = False
 
-        to_runway = self.runway.phi_to_runway
+        to_runway = self.phi_to_runway
         beta = self.faf_angle - np.arccos(
             np.dot(
                 np.transpose(np.dot(rot_matrix(to_runway), np.array([[0], [1]]))),
@@ -224,14 +197,75 @@ class Corridor:
             )
         )[0][0]
         min_angle = self.faf_angle - beta
-        if self.corridor1.intersects(shape.Point(x, y)) and min_angle <= relative_angle(to_runway,
-                                                                                        phi) <= self.faf_angle:
+        if self.corridor1.intersects(geom.Point(x, y)) and min_angle <= relative_angle(to_runway,
+                                                                                       phi) <= self.faf_angle:
             direction_correct = True
-        elif self.corridor2.intersects(shape.Point(x, y)) and min_angle <= relative_angle(phi,
-                                                                                          to_runway) <= self.faf_angle:
+        elif self.corridor2.intersects(geom.Point(x, y)) and min_angle <= relative_angle(phi,
+                                                                                         to_runway) <= self.faf_angle:
             direction_correct = True
 
         return direction_correct
+
+
+class Runway:
+    corridor: Corridor
+
+    def __init__(self, x, y, h, phi):
+        """
+        Defines position and orientation of the runway
+        """
+        self.x = x
+        self.y = y
+        self.h = h
+        self.phi_from_runway = phi
+        self.phi_to_runway = (phi + 180) % 360
+        self.corridor = Corridor(x, y, h, phi)
+
+    def inside_corridor(self, x: int, y: int, h: int, phi: int):
+        """
+        Checks if an airplane at a specific 3D point and heading is inside the approach corridor
+
+        :param x: X position of the airplane
+        :param y: Y position of the airplane
+        :param h: Altitude of the airplane
+        :param phi: Heading of the airplane [degrees]
+        """
+        return self.corridor.inside_corridor(x, y, h, phi)
+
+
+class MinimumVectoringAltitude:
+    area: geom.polygon
+    height: int
+
+    def __init__(self, area: geom.polygon, height: int):
+        self.area = area
+        self.height = height
+
+
+class Airspace:
+    mvas: List[MinimumVectoringAltitude]
+
+    def __init__(self, mvas: List[MinimumVectoringAltitude], runway: Runway):
+        """
+        Defines the airspace. Each area is a polygon entered as a list of tuples, Pass several areas as a list or tuple
+        MVA is defined by a number (height in feet), pass as a list or tuple equal to the number of
+        """
+        self.mvas = mvas
+        self.runway = runway
+
+    def find_mva(self, x, y):
+        for mva in self.mvas:
+            if mva.area.contains(geom.Point(x, y)):
+                return mva
+        raise ValueError('Outside of airspace')
+
+    def get_mva_height(self, x, y):
+        return self.find_mva(x, y).height
+
+    def get_bounding_box(self):
+        polys: List[geom.polygon] = [mva.area for mva in self.mvas]
+        combined_poly = shapely.ops.unary_union(polys)
+        return combined_poly.bounds
 
 
 def relative_angle(angle1, angle2):
