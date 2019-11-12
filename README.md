@@ -1,3 +1,5 @@
+![Build Status](https://api.travis-ci.com/fvalka/atc-reinforcement-learning.svg?branch=master "Build Status")
+
 # Reinforcement Learning of Air Traffic Control Tasks
 ## Project Proposition
 The goal is to train a neural network to perform basic Air Traffic Control Tasks through reinforcement learning. 

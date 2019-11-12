@@ -73,10 +73,10 @@ class MyTestCase(unittest.TestCase):
         # min_x, min_y, max_x, max_y
         result = test_airspace.get_bounding_box()
 
-        self.assertEquals(result[0], 0.0)
-        self.assertEquals(result[1], 0.0)
-        self.assertEquals(result[2], 35.0)
-        self.assertEquals(result[3], 40.0)
+        self.assertEqual(result[0], 0.0)
+        self.assertEqual(result[1], 0.0)
+        self.assertEqual(result[2], 35.0)
+        self.assertEqual(result[3], 40.0)
 
     def generate_mvas(self):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
