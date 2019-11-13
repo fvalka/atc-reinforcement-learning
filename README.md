@@ -36,8 +36,7 @@ features for a minimal viable simulation would be as follows.
 *   Assign an altitude to the airplane
 
 ### Reward
-*   Bringing the aircraft to the Final Approach Fix (FAF) at the correct altitude and within the correct angle, wins the
-  simulation 
+*   Bringing the aircraft to the Final Approach Fix (FAF) at the correct altitude and within the correct angle, wins the simulation
 *   Every time step in which the airplane has not reached the FAF yet carries a small penalty
 *   Descending the airplane below the Minimum Vectoring Altitude carries a heavy penalty
 *   Not maintaining sufficient separation (e.g. 3nm and 1000ft) between two aircraft carries a heavy penalty
@@ -63,8 +62,7 @@ This problem allows for much more realism than described in the basic model abov
 
 ### Reward
 *   Realistic fuel usage and penalties for higher fuel usage
-*   Aircraft performance and altitude based noise immission model with penalties for higher noise levels, especially over
-noise sensitive areas. 
+*   Aircraft performance and altitude based noise immission model with penalties for higher noise levels, especially over noise sensitive areas
 *   Penalties for flight through or close to thunderstorms
 
 A complex scenario could look like this:
