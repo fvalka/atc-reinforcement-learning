@@ -1,4 +1,3 @@
-import math
 from typing import List
 
 import gym
@@ -118,23 +117,33 @@ class AtcGym(gym.Env):
         """
         Rendering the environments state
         """
-        screen_width = 600
-
-        bbox = self._airspace.get_bounding_box()
-        world_x0 = bbox[0]
-        world_y0 = bbox[1]
-        world_size_x = bbox[2] - world_x0
-        world_size_y = bbox[3] - world_y0
-        scale = screen_width / world_size_x
-
-        screen_height = int(world_size_y * scale)
+        def transform_world_to_screen(coords):
+            return [((coord[0] + self._world_x0) * self._scale + self._padding,
+                     (coord[1] + self._world_y0) * self._scale + self._padding) for coord in coords]
 
         if self.viewer is None:
+            self._padding = 10
+            screen_width = 600
+
+            bbox = self._airspace.get_bounding_box()
+            self._world_x0 = bbox[0]
+            self._world_y0 = bbox[1]
+            world_size_x = bbox[2] - self._world_x0
+            world_size_y = bbox[3] - self._world_y0
+            self._scale = screen_width / world_size_x
+            screen_height = int(world_size_y * self._scale)
+
             from gym.envs.classic_control import rendering
-            self.viewer = rendering.Viewer(screen_width, screen_height)
+            from pyglet import gl
+            self.viewer = rendering.Viewer(screen_width + 2 * self._padding, screen_height + 2 * self._padding)
+
+            gl.glEnable(gl.GL_LINE_SMOOTH)
+            gl.glEnable(gl.GL_POLYGON_SMOOTH)
 
             for mva in self._mvas:
-                mva_outline = rendering.PolyLine(mva.area.exterior.coords, True)
+                mva_outline = rendering.PolyLine(transform_world_to_screen(mva.area.exterior.coords), True)
+                mva_outline.set_linewidth(2)
+                mva_outline.set_color(21./256., 79./256., 113./256.)
                 self.viewer.add_geom(mva_outline)
 
         return self.viewer.render(mode == 'rgb_array')

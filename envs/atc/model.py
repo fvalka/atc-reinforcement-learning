@@ -1,8 +1,9 @@
 import math
+from typing import List
+
+import numpy as np
 import shapely.geometry as geom
 import shapely.ops
-from typing import List, Any
-import numpy as np
 
 nautical_miles_to_feet = 6076  # ft/nm
 
