@@ -10,11 +10,10 @@ import simulation.model as model
 
 
 class AtcGym(gym.Env):
-    def __init__(self) -> None:
+    def __init__(self):
         self._mvas = self._generate_mvas()
-        self._airspace = self._generate_airspace(self._mvas)
-        self._runway = self._generate_runway(self._airspace)
-        self._corridor = self._generate_corridor(self._runway)
+        self._runway = self._generate_runway()
+        self._airspace = self._generate_airspace(self._mvas, self._runway)
 
         self._sim_parameters = model.SimParameters(1)
 
@@ -119,10 +118,6 @@ class AtcGym(gym.Env):
 
 
 
-
-
-        pass
-
     def close(self):
         if self.viewer is not None:
             self.viewer.close()
@@ -137,21 +132,17 @@ class AtcGym(gym.Env):
         mvas = [mva_1, mva_2, mva_3, mva_4, mva_5]
         return mvas
 
-    def _generate_airspace(self, mvas: List[model.MinimumVectoringAltitude]) -> model.Airspace:
-        airspace = model.Airspace(mvas)
+    def _generate_airspace(self, mvas: List[model.MinimumVectoringAltitude], runway: model.Runway) -> model.Airspace:
+        airspace = model.Airspace(mvas, runway)
         return airspace
 
-    def _generate_runway(self, airspace: model.Airspace) -> model.Runway:
+    def _generate_runway(self) -> model.Runway:
         x = 20
         y = 20
         h = 0
         phi = 180
-        runway = model.Runway(x, y, h, phi, airspace)
+        runway = model.Runway(x, y, h, phi)
         return runway
-
-    def _generate_corridor(self, runway: model.Runway) -> model.Corridor:
-        corridor = model.Corridor(runway)
-        return corridor
 
 
 env = gym.make('CartPole-v0')
