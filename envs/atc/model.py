@@ -263,6 +263,11 @@ class Airspace:
         return self.find_mva(x, y).height
 
     def get_bounding_box(self):
+        """
+        Returns the bounding box of the airspace
+
+        :return Tuple with minx, miny, maxx, maxy
+        """
         polys: List[geom.polygon] = [mva.area for mva in self.mvas]
         combined_poly = shapely.ops.unary_union(polys)
         return combined_poly.bounds

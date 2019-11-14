@@ -2,10 +2,10 @@ import unittest
 from typing import List
 
 import shapely.geometry as shape
-import simulation.model as model
+from . import model
 
 
-class MyTestCase(unittest.TestCase):
+class ModelTestCase(unittest.TestCase):
 
     def test_airspace_get_mvas(self):
         x = 34

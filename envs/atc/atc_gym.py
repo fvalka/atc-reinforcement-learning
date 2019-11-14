@@ -1,3 +1,4 @@
+import math
 from typing import List
 
 import gym
@@ -6,7 +7,7 @@ import numpy as np
 import shapely.geometry as shape
 from gym.utils import seeding
 
-import simulation.model as model
+from . import model
 
 
 class AtcGym(gym.Env):
@@ -23,11 +24,15 @@ class AtcGym(gym.Env):
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                                                high=np.array([50, 50, 40000, 360 - self._sim_parameters.precision, 400, 36000, 50, 360, 360]))
+                                                high=np.array(
+                                                    [50, 50, 40000, 360 - self._sim_parameters.precision, 400, 36000,
+                                                     50, 360, 360]))
 
         self.reward_range = (-100.0, 100.0)
 
         self.reset()
+
+        self.viewer = None
 
     def seed(self, seed=None):
         """
@@ -114,9 +119,25 @@ class AtcGym(gym.Env):
         Rendering the environments state
         """
         screen_width = 600
-        screen_height = 600
 
+        bbox = self._airspace.get_bounding_box()
+        world_x0 = bbox[0]
+        world_y0 = bbox[1]
+        world_size_x = bbox[2] - world_x0
+        world_size_y = bbox[3] - world_y0
+        scale = screen_width / world_size_x
 
+        screen_height = int(world_size_y * scale)
+
+        if self.viewer is None:
+            from gym.envs.classic_control import rendering
+            self.viewer = rendering.Viewer(screen_width, screen_height)
+
+            for mva in self._mvas:
+                mva_outline = rendering.PolyLine(mva.area.exterior.coords, True)
+                self.viewer.add_geom(mva_outline)
+
+        return self.viewer.render(mode == 'rgb_array')
 
     def close(self):
         if self.viewer is not None:
@@ -143,4 +164,3 @@ class AtcGym(gym.Env):
         phi = 180
         runway = model.Runway(x, y, h, phi)
         return runway
-
