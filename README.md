@@ -1,4 +1,6 @@
 ![Build Status](https://api.travis-ci.com/fvalka/atc-reinforcement-learning.svg?branch=master "Build Status")
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/d38095018a04482f90662c76bd602e83)](https://www.codacy.com/manual/fvalka/atc-reinforcement-learning?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=fvalka/atc-reinforcement-learning&amp;utm_campaign=Badge_Grade)
+[![codecov](https://codecov.io/gh/fvalka/atc-reinforcement-learning/branch/master/graph/badge.svg)](https://codecov.io/gh/fvalka/atc-reinforcement-learning)
 
 # Reinforcement Learning of Air Traffic Control Tasks
 ## Project Proposition

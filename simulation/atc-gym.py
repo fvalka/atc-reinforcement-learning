@@ -23,7 +23,7 @@ class AtcGym(gym.Env):
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                                                high=np.array([50, 50, 36000, 360, 400, 36000, 50, 360, 360]))
+                                                high=np.array([50, 50, 40000, 360 - self._sim_parameters.precision, 400, 36000, 50, 360, 360]))
 
         self.reward_range = (-100.0, 100.0)
 
@@ -144,9 +144,3 @@ class AtcGym(gym.Env):
         runway = model.Runway(x, y, h, phi)
         return runway
 
-
-env = gym.make('CartPole-v0')
-env.reset()
-for _ in range(1000):
-    env.render()
-    env.step(env.action_space.sample())  # take a random action
