@@ -96,6 +96,19 @@ OpenAIs Gym Env is used as the interface between the simulation and RL algorithm
 The 2D rendering of the current simulation state is based upon the OpenAI Gyms' rendering 
 library which used pyglet as its graphics backend. 
 
+### Units of Measure
+
+Aviation typical imperial units of measure are used throughout the environment. 
+
+| Parameter      | Unit            |
+| -------------- | --------------- |
+| Altitude       | Feet            |
+| Vertical Speed | Feet per minute |
+| Distance       | Nautical miles  |
+| Speed          | Knots           |
+| Heading        | Degrees         |
+
+
 ## Original Implementation Ideas
 
 The implementation can be split into two major parts: The simulation and the neural network. 

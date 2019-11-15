@@ -157,20 +157,20 @@ class Corridor:
         self.phi_from_runway = phi_from_runway
         self.phi_to_runway = (phi_from_runway + 180) % 360
 
-        faf_distance = 8
+        faf_threshold_distance = 8
         faf_angle = 45
         self.faf_angle = faf_angle
         faf_iaf_distance = 3
         faf_iaf_distance_corner = faf_iaf_distance / math.cos(math.radians(faf_angle))
         self.faf = np.array([[x], [y]]) + np.dot(rot_matrix(phi_from_runway),
-                                                 np.array([[0], [faf_distance]]))
+                                                 np.array([[0], [faf_threshold_distance]]))
         self.corner1 = np.dot(rot_matrix(faf_angle),
                               np.dot(rot_matrix(phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
         self.corner2 = np.dot(rot_matrix(-faf_angle),
                               np.dot(rot_matrix(phi_from_runway), [[0], [faf_iaf_distance_corner]])) + self.faf
         self.corridor_horizontal = geom.Polygon([self.faf, self.corner1, self.corner2])
         self.iaf = np.array([[x], [y]]) + np.dot(rot_matrix(phi_from_runway),
-                                                 np.array([[0], [faf_distance + faf_iaf_distance]]))
+                                                 np.array([[0], [faf_threshold_distance + faf_iaf_distance]]))
         self.corridor1 = geom.Polygon([self.faf, self.corner1, self.iaf])
         self.corridor2 = geom.Polygon([self.faf, self.corner2, self.iaf])
 
