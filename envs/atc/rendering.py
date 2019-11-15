@@ -1,8 +1,10 @@
 import pyglet
 from gym.envs.classic_control.rendering import Geom
 
+from envs.atc.themes import ColorScheme
 
-class Text(Geom):
+
+class Label(Geom):
     def __init__(self, text, x, y):
         super().__init__()
         self.text = text
@@ -12,7 +14,9 @@ class Text(Geom):
     def render1(self):
         label = pyglet.text.Label(self.text,
                                   font_name='Arial',
-                                  font_size=12,
+                                  font_size=9,
+                                  bold=True,
                                   x=self.x, y=self.y,
-                                  color=(0, 0, 0, 255))
+                                  anchor_x="left", anchor_y="top",
+                                  color=ColorScheme.label)
         label.draw()

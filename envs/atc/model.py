@@ -9,11 +9,12 @@ nautical_miles_to_feet = 6076  # ft/nm
 
 
 class Airplane:
-    def __init__(self, sim_parameters, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
+    def __init__(self, sim_parameters, name, x, y, h, phi, v, h_min=0, h_max=38000, v_min=100, v_max=300):
         """
         State of one aircraft simulated in the environment
 
         :param sim_parameters: Definition of the simulation, timestep and more
+        :param name: Name of the flight/airplane
         :param x: Position in cartesian world coordinates
         :param y: Position in cartesian world coordinates
         :param h: Height [feet]
@@ -25,6 +26,7 @@ class Airplane:
         :param h_max: Max. speed [feet]        
         """
         self.sim_parameters = sim_parameters
+        self.name = name
         self.x = x
         self.y = y
         self.h = h
@@ -43,7 +45,8 @@ class Airplane:
         self.a_max = 5
         self.a_min = -5
         self.phi_dot_max = 3
-        self.phi_dot_min = 3
+        self.phi_dot_min = -3
+        self.position_history = []
 
     def above_mva(self, mvas):
         for mva in mvas:
@@ -73,7 +76,7 @@ class Airplane:
 
         self.v = self.v + delta_v
 
-        return math.abs(delta_v) >= self.sim_parameters.precision
+        return abs(delta_v) >= self.sim_parameters.precision
 
     def action_h(self, action_h):
         """
@@ -97,7 +100,7 @@ class Airplane:
 
         self.h = self.h + delta_h
 
-        return math.abs(delta_h) >= self.sim_parameters.precision
+        return abs(delta_h) >= self.sim_parameters.precision
 
     def action_phi(self, action_phi):
         """
@@ -117,14 +120,16 @@ class Airplane:
 
         self.phi = self.phi + delta_phi
 
-        return math.abs(delta_phi) >= self.sim_parameters.precision
+        return abs(delta_phi) >= self.sim_parameters.precision
 
     def step(self):
+        self.position_history.append((self.x, self.y))
+
         # convert speed vector to nautical miles per second
         v_unrotated = np.array([[0], [(self.v / 3600) * self.sim_parameters.timestep]])
         delta_x_y = np.dot(rot_matrix(self.phi), v_unrotated)
-        self.x += delta_x_y[0]
-        self.y += delta_x_y[1]
+        self.x += delta_x_y[0][0]
+        self.y += delta_x_y[1][0]
 
 
 class SimParameters:

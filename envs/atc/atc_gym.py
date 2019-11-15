@@ -3,19 +3,17 @@ from typing import List
 import gym
 import gym.spaces
 import numpy as np
-import pyglet
 import shapely.geometry as shape
 from gym.envs.classic_control import rendering
-from gym.envs.classic_control.rendering import Geom
 from gym.utils import seeding
 
-from envs.atc.rendering import Text
+from envs.atc.rendering import Label
+from envs.atc.themes import ColorScheme
 from . import model
 
 
 class AtcGym(gym.Env):
     def __init__(self):
-        self._screen_color_primary = [21. / 256., 79. / 256., 113. / 256.]
         self._mvas = self._generate_mvas()
         self._runway = self._generate_runway()
         self._airspace = self._generate_airspace(self._mvas, self._runway)
@@ -77,15 +75,15 @@ class AtcGym(gym.Env):
             reward = -100
             mva = 0  # dummy value outside of range so that the MVA is set for the last state
 
-        if self._corridor.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
+        if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
             reward = 100
             done = True
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         # FIXME calculate relative angle to FAF phi_rel_faf
-        to_faf_x = self._corridor.faf[0] - self._airplane.x
-        to_faf_y = self._corridor.faf[1] - self._airplane.y
+        to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
+        to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
         d_faf = np.hypot(to_faf_x, to_faf_y)
         phi_rel_faf = np.arctan2(to_faf_y, to_faf_x)
         phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
@@ -115,17 +113,12 @@ class AtcGym(gym.Env):
         :return:
         """
 
-        self._airplane = model.Airplane(self._sim_parameters, 0, 10, 16000, 90, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 5, 5, 16000, 90, 250)
 
     def render(self, mode='human'):
         """
         Rendering the environments state
         """
-
-        def transform_world_to_screen(coords):
-            return [((coord[0] + self._world_x0) * self._scale + self._padding,
-                     (coord[1] + self._world_y0) * self._scale + self._padding) for coord in coords]
-
         if self.viewer is None:
             self._padding = 10
             screen_width = 600
@@ -142,16 +135,56 @@ class AtcGym(gym.Env):
             from pyglet import gl
             self.viewer = rendering.Viewer(screen_width + 2 * self._padding, screen_height + 2 * self._padding)
 
+            background = rendering.FilledPolygon([(0, 0), (0, screen_height + 2 * self._padding),
+                                                  (screen_width + 2 * self._padding, screen_height + 2 * self._padding),
+                                                  (screen_width + 2 * self._padding, 0)])
+            background.set_color(*ColorScheme.background_inactive)
+            self.viewer.add_geom(background)
+
             gl.glEnable(gl.GL_LINE_SMOOTH)
             gl.glEnable(gl.GL_POLYGON_SMOOTH)
 
-            self._render_mvas(transform_world_to_screen)
+            self._render_mvas()
             self._render_runway()
             self._render_faf()
-
             self._render_approach()
 
+        self._render_airplane(self._airplane)
+
         return self.viewer.render(mode == 'rgb_array')
+
+    def _render_airplane(self, airplane: model.Airplane):
+        render_size = 4
+        vector = self._screen_vector(airplane.x, airplane.y)
+        corner_vector = np.array([[0], [render_size]])
+        corner_top_right = np.dot(model.rot_matrix(45), corner_vector) + vector
+        corner_bottom_right = np.dot(model.rot_matrix(135), corner_vector) + vector
+        corner_bottom_left = np.dot(model.rot_matrix(225), corner_vector) + vector
+        corner_top_left = np.dot(model.rot_matrix(315), corner_vector) + vector
+
+        symbol = rendering.PolyLine([corner_top_right, corner_bottom_right, corner_bottom_left, corner_top_left], True)
+        symbol.set_color(*ColorScheme.airplane)
+        symbol.set_linewidth(2)
+        self.viewer.add_onetime(symbol)
+
+        label_pos = np.dot(model.rot_matrix(135), 2 * corner_vector) + vector
+        render_altitude = round(airplane.h / 100)
+        render_speed = round(airplane.v / 10)
+        render_text = "%d  %d" % (render_altitude, render_speed)
+        label_name = Label(airplane.name, x=label_pos[0][0], y=label_pos[1][0])
+        label_details = Label(render_text, x=label_pos[0][0], y=label_pos[1][0] - 15)
+        self.viewer.add_onetime(label_name)
+        self.viewer.add_onetime(label_details)
+
+        n = len(airplane.position_history)
+        for i in range(n - 5, max(0, n - 25), -1):
+            if i % 5 == 0:
+                circle = rendering.make_circle(radius=2, res=12)
+                screen_vector = self._screen_vector(airplane.position_history[i][0], airplane.position_history[i][1])
+                transform = rendering.Transform(translation=(screen_vector[0][0], screen_vector[1][0]))
+                circle.add_attr(transform)
+                circle.set_color(*ColorScheme.airplane)
+                self.viewer.add_onetime(circle)
 
     def _render_approach(self):
         iaf_x = self._runway.corridor.iaf[0][0]
@@ -163,7 +196,7 @@ class AtcGym(gym.Env):
             start = runway_vector + runway_iaf / dashes * 2 * i
             end = runway_vector + runway_iaf / dashes * (2 * i + 1)
             dash = rendering.PolyLine([start, end], False)
-            dash.set_color(*self._screen_color_primary)
+            dash.set_color(*ColorScheme.lines_info)
             self.viewer.add_geom(dash)
 
     def _render_faf(self):
@@ -179,16 +212,26 @@ class AtcGym(gym.Env):
         corner_left = np.dot(model.rot_matrix(242), corner_vector) + faf_vector
 
         poly_line = rendering.PolyLine([corner_top, corner_right, corner_left], True)
-        poly_line.set_color(*self._screen_color_primary)
+        poly_line.set_color(*ColorScheme.lines_info)
         poly_line.set_linewidth(2)
         self.viewer.add_geom(poly_line)
 
-    def _render_mvas(self, transform_world_to_screen):
+    def _render_mvas(self):
+        def transform_world_to_screen(coords):
+            return [((coord[0] + self._world_x0) * self._scale + self._padding,
+                     (coord[1] + self._world_y0) * self._scale + self._padding) for coord in coords]
+
         for mva in self._mvas:
-            mva_outline = rendering.PolyLine(transform_world_to_screen(mva.area.exterior.coords), True)
-            mva_outline.set_linewidth(2)
-            mva_outline.set_color(*self._screen_color_primary)
-            self.viewer.add_geom(mva_outline)
+            coordinates = transform_world_to_screen(mva.area.exterior.coords)
+
+            fill = rendering.FilledPolygon(coordinates)
+            fill.set_color(*ColorScheme.background_active)
+            self.viewer.add_geom(fill)
+
+            outline = rendering.PolyLine(coordinates, True)
+            outline.set_linewidth(1)
+            outline.set_color(*ColorScheme.mva)
+            self.viewer.add_geom(outline)
 
     def _render_runway(self):
         runway_length = 1.7 * self._scale
@@ -198,7 +241,7 @@ class AtcGym(gym.Env):
         runway_line = rendering.PolyLine(
             [runway_vector - runway_to_threshold_vector, runway_vector + runway_to_threshold_vector], False)
         runway_line.set_linewidth(5)
-        runway_line.set_color(*self._screen_color_primary)
+        runway_line.set_color(*ColorScheme.runway)
         self.viewer.add_geom(runway_line)
 
     def _screen_vector(self, x, y):
