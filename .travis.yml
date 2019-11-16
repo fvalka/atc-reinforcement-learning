@@ -1,6 +1,8 @@
 language: python
 python:
   - "3.6"
+before_install:
+  - sudo apt-get -y python-opengl
 install:
   - pip install -r requirements.txt
 script:
