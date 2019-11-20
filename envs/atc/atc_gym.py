@@ -60,6 +60,8 @@ class AtcGym(gym.Env):
         reward += self._action_with_reward(self._airplane.action_h, action[1])
         reward += self._action_with_reward(self._airplane.action_phi, action[2])
 
+        #print("action_v: %.2f || action_h: %.1f || action_phi: %.1f" % (action[0], action[1], action[2]))
+
         self._airplane.step()
 
         # check that the plane is above the MVA (minimum vectoring altitude)
@@ -69,6 +71,8 @@ class AtcGym(gym.Env):
             if self._airplane.h < mva:
                 done = True
                 reward = -100
+            else:
+                reward += (self._airplane.h - mva)/40000 * 1
         except ValueError:
             # Airplane has left the airspace
             done = True
@@ -80,19 +84,25 @@ class AtcGym(gym.Env):
             reward = 100
             done = True
 
-        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
-        # FIXME calculate relative angle to FAF phi_rel_faf
-        to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
-        to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
-        d_faf = np.hypot(to_faf_x, to_faf_y)
-        phi_rel_faf = np.arctan2(to_faf_y, to_faf_x)
-        phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
+        state = self._get_state()
+        self.state = state
 
-        state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
-                          self._airplane.v, self._airplane.h - mva, d_faf, phi_rel_faf, phi_rel_runway],
-                         dtype=np.float32)
+        reward += 1.0/max(self._d_faf, 1.0) * 1
 
         return state, reward, done, {}
+
+    def _get_state(self):
+        mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
+        # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
+        to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
+        to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
+        phi_rel_faf = -1 * np.degrees(np.arctan2(to_faf_y, to_faf_x))
+        phi_rel_runway = -1 * model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
+        self._d_faf = np.hypot(to_faf_x, to_faf_y)
+        state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
+                          self._airplane.v, self._airplane.h - mva, self._d_faf, phi_rel_faf, phi_rel_runway],
+                         dtype=np.float32)
+        return state
 
     @staticmethod
     def _action_with_reward(func, action):
@@ -113,7 +123,9 @@ class AtcGym(gym.Env):
         :return:
         """
 
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 5, 5, 16000, 90, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 9, 30, 16000, 90, 250)
+        self.state = self._get_state()
+        return self.state
 
     def render(self, mode='human'):
         """
