@@ -20,9 +20,12 @@ class AtcGym(gym.Env):
 
         self._sim_parameters = model.SimParameters(1)
 
+        self.normalization_offset = np.array([100, 0, 0])
+        self.normalization_factor = np.array([200, 40000, 360 - self._sim_parameters.precision])
+
         # action space structure: v, h, phi
-        self.action_space = gym.spaces.Box(low=np.array([100, 0, 0]),
-                                           high=np.array([300, 40000, 360 - self._sim_parameters.precision]))
+        self.action_space = gym.spaces.Box(low=np.array([0, 0, 0]),
+                                           high=np.array([1, 1, 1]))
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]),
@@ -32,6 +35,7 @@ class AtcGym(gym.Env):
 
         self.reward_range = (-100.0, 100.0)
 
+        self.done = True
         self.reset()
         self.viewer = None
 
@@ -51,16 +55,17 @@ class AtcGym(gym.Env):
         :param action: Action in format: v, h, phi
         :return:
         """
-        done = False
+        self.done = False
         reward = -0.001
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
-        reward += self._action_with_reward(self._airplane.action_v, action[0])
-        reward += self._action_with_reward(self._airplane.action_h, action[1])
-        reward += self._action_with_reward(self._airplane.action_phi, action[2])
+        def denormalized_action(index):
+            return action[index] * self.normalization_factor[index] + self.normalization_offset[index]
 
-        #print("action_v: %.2f || action_h: %.1f || action_phi: %.1f" % (action[0], action[1], action[2]))
+        reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
+        reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
+        reward += self._action_with_reward(self._airplane.action_phi, denormalized_action(2))
 
         self._airplane.step()
 
@@ -69,30 +74,36 @@ class AtcGym(gym.Env):
             mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
 
             if self._airplane.h < mva:
-                done = True
                 reward = -100
+                self.done = True
             else:
-                reward += (self._airplane.h - mva)/40000 * 1
+                reward += (self._airplane.h - mva)/40000 * 0.0001
         except ValueError:
             # Airplane has left the airspace
-            done = True
+            self.done = True
             reward = -100
             mva = 0  # dummy value outside of range so that the MVA is set for the last state
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
             reward = 100
-            done = True
+            self.done = True
 
         state = self._get_state()
         self.state = state
 
-        reward += 1.0/max(self._d_faf, 1.0) * 1
+        reward += 1.0/max(self._d_faf, 1.0) * 0.0001
 
-        return state, reward, done, {}
+        return state, reward, self.done, {}
 
     def _get_state(self):
-        mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
+        try:
+            mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
+        except ValueError:
+            # Airplane left airspace, simulation must be done, otherwise this is a bug
+            if not self.done:
+                raise AssertionError("Mva not found but simulation is not done yet")
+            mva = 0
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
         to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
@@ -122,7 +133,7 @@ class AtcGym(gym.Env):
         Creates a new airplane instance
         :return:
         """
-
+        self.done = False
         self._airplane = model.Airplane(self._sim_parameters, "FLT01", 9, 30, 16000, 90, 250)
         self.state = self._get_state()
         return self.state

@@ -1,40 +1,44 @@
 import os
+import time
+import uuid
 from multiprocessing import freeze_support
 
 import gym
-import time
-import matplotlib.pyplot as plt
+from stable_baselines import PPO2
 from stable_baselines.bench import Monitor
-
 from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.common.vec_env import SubprocVecEnv, VecNormalize
-from stable_baselines import PPO2, ACKTR, results_plotter
+from stable_baselines.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 
+# noinspection PyUnresolvedReferences
 import envs.atc.atc_gym
 
 
-def learn():
+def learn(multiprocess=True, normalize=True, time_steps=int(1e6)):
+    log_dir = "../logs/%.2f/" % time.time()
 
     def make_env():
+        log_dir_single = "%s/%s/" % (log_dir, uuid.uuid4())
         env = gym.make('AtcEnv-v0')
+        os.makedirs(log_dir_single, exist_ok=True)
+        env = Monitor(env, log_dir_single, allow_early_resets=True)
         return env
 
-    # Create log dir
-    log_dir = "../logs/"
-    os.makedirs(log_dir, exist_ok=True)
-    # multiprocess environment
-    n_cpu = 16
-    env = SubprocVecEnv([lambda: make_env() for i in list(range(n_cpu))])
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
+    if multiprocess:
+        n_cpu = 16
+        env = SubprocVecEnv([lambda: make_env() for i in list(range(n_cpu))])
+    else:
+        env = DummyVecEnv([lambda: make_env()])
 
-    model = PPO2(MlpPolicy, env, verbose=1)
+    if normalize:
+        env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
+
+    model = PPO2(MlpPolicy, env, verbose=0)
     # model = ACKTR(MlpPolicy, env, verbose=1)
-    time_steps = int(1e8)
     model.learn(total_timesteps=time_steps)
-    #model.save("PPO2_atc_gym")
 
-    #results_plotter.plot_results(["../logs/"], time_steps, results_plotter.X_TIMESTEPS, "ATC Gym")
-    #plt.show()
+    model_dir = "%s/%s/" % (log_dir, "model")
+    os.makedirs(model_dir, exist_ok=True)
+    model.save("%s/PPO2_atc_gym" % model_dir)
 
     obs = env.reset()
     for i in range(1000):
