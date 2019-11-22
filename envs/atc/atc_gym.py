@@ -13,13 +13,13 @@ from . import model
 
 
 class AtcGym(gym.Env):
-    def __init__(self):
+    def __init__(self, sim_parameters=model.SimParameters(1)):
         self._mvas = self._generate_mvas()
         self._runway = self._generate_runway()
         self._airspace = self._generate_airspace(self._mvas, self._runway)
         self._faf_mva = self._airspace.get_mva_height(self._runway.corridor.faf[0][0], self._runway.corridor.faf[1][0])
 
-        self._sim_parameters = model.SimParameters(1)
+        self._sim_parameters = sim_parameters
 
         self.normalization_offset = np.array([100, 0, 0])
         self.normalization_factor = np.array([200, 40000, 360 - self._sim_parameters.precision])
@@ -57,7 +57,7 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        reward = -0.005
+        reward = -0.005 * self._sim_parameters.timestep
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
@@ -96,7 +96,8 @@ class AtcGym(gym.Env):
 
         # advanced award for approach sector location
         reward_faf = 1 / np.maximum(np.power(self._d_faf, 0.2), 1)
-        reward_app_angle = np.power(1 - np.abs(model.relative_angle(self._runway.phi_to_runway, self._phi_rel_faf))/180, 1.5)
+        reward_app_angle = np.power(
+            1 - np.abs(model.relative_angle(self._runway.phi_to_runway, self._phi_rel_faf)) / 180, 1.5)
         reward += reward_faf * reward_app_angle * 2.0
 
         return state, reward, self.done, {}

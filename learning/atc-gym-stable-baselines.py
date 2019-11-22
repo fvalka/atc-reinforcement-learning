@@ -38,7 +38,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
     log_dir_tensorboard = "../logs/tensorboard/"
     print("Tensorboard log directory: %s" % os.path.abspath(log_dir_tensorboard))
     model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir_tensorboard,
-                 n_steps=1024, nminibatches=32, gamma=0.998, lam=0.98,
+                 n_steps=2048, nminibatches=32, gamma=0.995, lam=0.9,
                  noptepochs=4, ent_coef=0.0001, learning_rate=2.5e-4)
     # model = ACKTR(MlpPolicy, env, verbose=1)
     model.learn(total_timesteps=time_steps)
