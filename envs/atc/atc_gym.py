@@ -78,8 +78,8 @@ class AtcGym(gym.Env):
                 # Airplane has descended below the minimum vectoring altitude
                 reward = -200
                 self.done = True
-            #else:
-                #reward += (self._airplane.h - mva)/40000 * 0.0004
+            # else:
+            # reward += (self._airplane.h - mva)/40000 * 0.0004
         except ValueError:
             # Airplane has left the airspace
             self.done = True
@@ -94,7 +94,10 @@ class AtcGym(gym.Env):
         state = self._get_state()
         self.state = state
 
-        reward += 1.0/max(self._d_faf, 1.0)**2 * 0.0004
+        # advanced award for approach sector location
+        reward_faf = 1 / np.maximum(np.power(self._d_faf, 0.2), 1)
+        reward_app_angle = np.power(1 - np.abs(model.relative_angle(self._runway.phi_to_runway, self._phi_rel_faf))/180, 1.5)
+        reward += reward_faf * reward_app_angle * 2.0
 
         return state, reward, self.done, {}
 
@@ -109,11 +112,11 @@ class AtcGym(gym.Env):
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
         to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
-        phi_rel_faf = -1 * np.degrees(np.arctan2(to_faf_y, to_faf_x))
-        phi_rel_runway = -1 * model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
-        self._d_faf = np.sqrt(np.hypot(to_faf_x, to_faf_y)**2 + self._faf_mva**2)
+        phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
+        self._d_faf = np.sqrt(np.hypot(to_faf_x, to_faf_y) ** 2 + self._faf_mva ** 2)
+        self._phi_rel_faf = np.degrees(np.arctan2(to_faf_y, to_faf_x))
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
-                          self._airplane.v, self._airplane.h - mva, self._d_faf, phi_rel_faf, phi_rel_runway],
+                          self._airplane.v, self._airplane.h - mva, self._d_faf, self._phi_rel_faf, phi_rel_runway],
                          dtype=np.float32)
         return state
 
@@ -123,7 +126,7 @@ class AtcGym(gym.Env):
             action_taken = func(action)
             if action_taken:
                 return -0.005
-                #return 0.0
+                # return 0.0
         except ValueError:
             # invalid action, outside of permissible range
             return -0.1

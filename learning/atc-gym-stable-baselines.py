@@ -30,7 +30,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
     if multiprocess:
         env = SubprocVecEnv([lambda: make_env() for i in range(n_envs)])
     else:
-        env = DummyVecEnv([lambda: make_env() for i in range(n_envs)])
+        env = DummyVecEnv([lambda: make_env()])
 
     if normalize:
         env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
@@ -38,7 +38,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
     log_dir_tensorboard = "../logs/tensorboard/"
     print("Tensorboard log directory: %s" % os.path.abspath(log_dir_tensorboard))
     model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir_tensorboard,
-                 n_steps=2048, nminibatches=32, gamma=0.99, lam=0.98, noptepochs=4, ent_coef=0.001)
+                 n_steps=1024, nminibatches=32, gamma=0.998, lam=0.98, noptepochs=4, ent_coef=0.0005)
     # model = ACKTR(MlpPolicy, env, verbose=1)
     model.learn(total_timesteps=time_steps)
 
@@ -47,7 +47,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
     model.save("%s/PPO2_atc_gym" % model_dir)
 
     obs = env.reset()
-    for i in range(3000):
+    while True:
         action, _states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
         env.render()
@@ -55,4 +55,4 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(1e8), multiprocess=True)
+    learn(time_steps=int(1e5), multiprocess=False)
