@@ -19,11 +19,24 @@ class ModelTestCase(unittest.TestCase):
         test_mvas = self.generate_mvas()
         test_runway = self.generate_runway()
         test_airspace = self.generate_airspace(test_mvas, test_runway)
+        mva = test_airspace.get_mva_height(test_runway.corridor.faf[0][0], test_runway.corridor.faf[1][0])
         x = 19
         y = 10
-        h = 0
+        h = mva + 300
         phi = 30
         self.assertEqual(test_runway.inside_corridor(x, y, h, phi), True)
+
+    def test_inside_corridor_false_when_right_position_with_wrong_heading(self):
+        test_mvas = self.generate_mvas()
+        test_runway = self.generate_runway()
+        test_airspace = self.generate_airspace(test_mvas, test_runway)
+        mva = test_airspace.get_mva_height(test_runway.corridor.faf[0][0], test_runway.corridor.faf[1][0])
+        x = 19
+        y = 10
+        h = mva
+        phi = 330
+        self.assertEqual(test_runway.inside_corridor(x, y, h, phi), False)
+
 
     def test_inside_corridor_false_when_on_wrong_side(self):
         test_mvas = self.generate_mvas()

@@ -17,6 +17,7 @@ class AtcGym(gym.Env):
         self._mvas = self._generate_mvas()
         self._runway = self._generate_runway()
         self._airspace = self._generate_airspace(self._mvas, self._runway)
+        self._faf_mva = self._airspace.get_mva_height(self._runway.corridor.faf[0][0], self._runway.corridor.faf[1][0])
 
         self._sim_parameters = model.SimParameters(1)
 
@@ -33,7 +34,7 @@ class AtcGym(gym.Env):
                                                     [110, 50, 40000, 360 - self._sim_parameters.precision, 400, 36000,
                                                      50, 360, 360]))
 
-        self.reward_range = (-100.0, 100.0)
+        self.reward_range = (-300.0, 100.0)
 
         self.done = True
         self.reset()
@@ -56,7 +57,7 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        reward = -0.001
+        reward = -0.005
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
@@ -74,14 +75,15 @@ class AtcGym(gym.Env):
             mva = self._airspace.get_mva_height(self._airplane.x, self._airplane.y)
 
             if self._airplane.h < mva:
-                reward = -100
+                # Airplane has descended below the minimum vectoring altitude
+                reward = -200
                 self.done = True
-            else:
-                reward += (self._airplane.h - mva)/40000 * 0.0001
+            #else:
+                #reward += (self._airplane.h - mva)/40000 * 0.0004
         except ValueError:
             # Airplane has left the airspace
             self.done = True
-            reward = -100
+            reward = -50
             mva = 0  # dummy value outside of range so that the MVA is set for the last state
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
@@ -92,7 +94,7 @@ class AtcGym(gym.Env):
         state = self._get_state()
         self.state = state
 
-        reward += 1.0/max(self._d_faf, 1.0) * 0.0001
+        reward += 1.0/max(self._d_faf, 1.0)**2 * 0.0004
 
         return state, reward, self.done, {}
 
@@ -109,7 +111,7 @@ class AtcGym(gym.Env):
         to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
         phi_rel_faf = -1 * np.degrees(np.arctan2(to_faf_y, to_faf_x))
         phi_rel_runway = -1 * model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
-        self._d_faf = np.hypot(to_faf_x, to_faf_y)
+        self._d_faf = np.sqrt(np.hypot(to_faf_x, to_faf_y)**2 + self._faf_mva**2)
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
                           self._airplane.v, self._airplane.h - mva, self._d_faf, phi_rel_faf, phi_rel_runway],
                          dtype=np.float32)
@@ -120,7 +122,8 @@ class AtcGym(gym.Env):
         try:
             action_taken = func(action)
             if action_taken:
-                return -0.01
+                return -0.005
+                #return 0.0
         except ValueError:
             # invalid action, outside of permissible range
             return -0.1
