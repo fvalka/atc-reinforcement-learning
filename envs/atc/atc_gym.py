@@ -52,12 +52,13 @@ class AtcGym(gym.Env):
 
     def step(self, action):
         """
+        Perform a single step in the simulation
 
         :param action: Action in format: v, h, phi
-        :return:
+        :return: Reward obtained from this step
         """
         self.done = False
-        reward = -0.005 * self._sim_parameters.timestep
+        reward = -0.2 * self._sim_parameters.timestep
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
@@ -118,7 +119,7 @@ class AtcGym(gym.Env):
         # advanced award for approach sector location
         reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
-        return reward_faf * reward_app_angle * 4.0
+        return reward_faf * reward_app_angle * 20.0
 
     def _reward_approach_angle(self, d_faf, phi_to_runway, phi_rel_to_faf, phi_plane):
         """
@@ -139,7 +140,7 @@ class AtcGym(gym.Env):
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
         position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
 
-        return reward_model(side * plane_to_runway) * position_factor * 3.0
+        return reward_model(side * plane_to_runway) * position_factor * 20.0
 
     def _get_state(self):
         try:
@@ -165,11 +166,11 @@ class AtcGym(gym.Env):
         try:
             action_taken = func(action)
             if action_taken:
-                return -0.005
+                return 0.0
                 # return 0.0
         except ValueError:
             # invalid action, outside of permissible range
-            return -0.1
+            return -1.0
         return 0.0
 
     def reset(self):
