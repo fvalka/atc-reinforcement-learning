@@ -14,25 +14,56 @@ from . import model
 
 class AtcGym(gym.Env):
     def __init__(self, sim_parameters=model.SimParameters(1)):
+        self._sim_parameters = sim_parameters
+
         self._mvas = self._generate_mvas()
         self._runway = self._generate_runway()
         self._airspace = self._generate_airspace(self._mvas, self._runway)
         self._faf_mva = self._airspace.get_mva_height(self._runway.corridor.faf[0][0], self._runway.corridor.faf[1][0])
 
-        self._sim_parameters = sim_parameters
+        bbox = self._airspace.get_bounding_box()
+        self._world_x_min = bbox[0]
+        self._world_y_min = bbox[1]
+        self._world_x_max = bbox[2]
+        self._world_y_max = bbox[3]
+        world_x_length = self._world_x_max - self._world_x_min
+        world_y_length = self._world_y_max - self._world_y_min
+        world_max_distance = np.hypot(world_x_length, world_y_length)
 
-        self.normalization_offset = np.array([100, 0, 0])
-        self.normalization_factor = np.array([200, 40000, 360 - self._sim_parameters.precision])
+        self.normalization_action_offset = np.array([self._airplane.v_min, 0, 0])
+        self.normalization_action_factor = np.array([self._airplane.v_max - self._airplane.v_min,
+                                                     self._airplane.h_max,
+                                                     360])
 
         # action space structure: v, h, phi
-        self.action_space = gym.spaces.Box(low=np.array([0, 0, 0]),
+        self.action_space = gym.spaces.Box(low=np.array([-1, -1, -1]),
                                            high=np.array([1, 1, 1]))
 
+        self.normalization_state_min = np.array([
+            self._world_x_min,
+            self._world_y_min,
+            0,
+            0,
+            self._airplane.v_min,
+            0,
+            0,
+            -180,
+            -180])
+        self.normalization_state_max = np.array([
+            world_x_length,  # x position
+            world_y_length,  # y positon
+            self._airplane.h_max,  # maximum altitude, h in feet
+            360,  # airplane heading, phi in degrees
+            self._airplane.v_max - self._airplane.v_min,  # airplane speed, v in knots
+            self._airplane.h_max,  # height above the current mva in feet
+            world_max_distance,  # distance to FAF in nautical miles
+            360,  # phi relative to the FAF in degrees (-180, 180)
+            360  # phi relative to the runway in degrees (-180, 180)
+        ])
+
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
-        self.observation_space = gym.spaces.Box(low=np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                                                high=np.array(
-                                                    [110, 50, 40000, 360 - self._sim_parameters.precision, 400, 36000,
-                                                     50, 360, 360]))
+        self.observation_space = gym.spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1, -1, -1, -1]),
+                                                high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]))
 
         self.reward_range = (-300.0, 100.0)
 
@@ -63,7 +94,9 @@ class AtcGym(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
         def denormalized_action(index):
-            return action[index] * self.normalization_factor[index] + self.normalization_offset[index]
+            return action[index] * self.normalization_action_factor/2 + \
+                   self.normalization_action_factor/2 + \
+                   self.normalization_action_offset
 
         reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
         reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
@@ -95,12 +128,34 @@ class AtcGym(gym.Env):
         state = self._get_state()
         self.state = state
 
-        # Approach sector rewards
-        reward += self._reward_approach_position(self._d_faf, self._runway.phi_to_runway, self._phi_rel_faf)
-        reward += self._reward_approach_angle(self._d_faf, self._runway.phi_to_runway,
-                                              self._phi_rel_faf, self._airplane.phi)
+        # Reward shaping rewards for approach sector position and glideslope
+        if self._sim_parameters.reward_shaping:
+            reward += self._reward_approach_position(self._d_faf, self._runway.phi_to_runway, self._phi_rel_faf)
+            reward += self._reward_approach_angle(self._d_faf, self._runway.phi_to_runway,
+                                                  self._phi_rel_faf, self._airplane.phi)
+            reward += self._reward_glideslope(self._d_faf, self._airplane.h,
+                                              self._runway.phi_to_runway, self._phi_rel_faf)
+
+        if self._sim_parameters.normalize_state:
+            state = (state - self.normalization_state_min - 0.5 * self.normalization_state_max) \
+                    / (0.5 * self.normalization_state_max)
 
         return state, reward, self.done, {}
+
+    def _reward_glideslope(self, d_faf, h, phi_to_runway, phi_rel_to_faf):
+        """
+        Calculates a reward based upon the on glideslope performance of the airplane, weighted with the position
+        relative to the FAF.
+
+        :param d_faf: Distance to the faf, in nm
+        :param h: Altitude of the airplane
+        :param phi_to_runway: Approach course/Runway heading
+        :param phi_rel_to_faf: Angle of the airplane to the FAF
+        :return: Reward factor
+        """
+        on_gp_altitude = np.tan(np.radians(3)) * d_faf + self._faf_mva
+        position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
+        return np.abs(h - on_gp_altitude) * position_factor * 20.0
 
     def _reward_approach_position(self, d_faf, phi_to_runway, phi_rel_to_faf, faf_power=0.2):
         """
@@ -114,7 +169,7 @@ class AtcGym(gym.Env):
         :param phi_rel_to_faf: Angle of the airplane to the FAF
         :param faf_power: Determines the fall-off based upon the distance. Use larger values for rewards only close
         to the FAF
-        :return: Reward factor, between 0.0 and 4.0
+        :return: Reward factor
         """
         # advanced award for approach sector location
         reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
@@ -131,8 +186,9 @@ class AtcGym(gym.Env):
         :param phi_to_runway: Approach course/Runway heading
         :param phi_rel_to_faf: Angle of the airplane to the FAF
         :param phi_plane: Heading of the plane
-        :return: Reward factor, between 0.0 and 3.0
+        :return: Reward factor
         """
+
         def reward_model(angle):
             return np.power(-np.power((angle - 22.5) / 202, 2) + 1, 32)
 
@@ -193,11 +249,8 @@ class AtcGym(gym.Env):
             self._padding = 10
             screen_width = 600
 
-            bbox = self._airspace.get_bounding_box()
-            self._world_x0 = bbox[0]
-            self._world_y0 = bbox[1]
-            world_size_x = bbox[2] - self._world_x0
-            world_size_y = bbox[3] - self._world_y0
+            world_size_x = self._world_x_max - self._world_x_min
+            world_size_y = self._world_y_max - self._world_y_min
             self._scale = screen_width / world_size_x
             screen_height = int(world_size_y * self._scale)
 
@@ -288,8 +341,8 @@ class AtcGym(gym.Env):
 
     def _render_mvas(self):
         def transform_world_to_screen(coords):
-            return [((coord[0] + self._world_x0) * self._scale + self._padding,
-                     (coord[1] + self._world_y0) * self._scale + self._padding) for coord in coords]
+            return [((coord[0] + self._world_x_min) * self._scale + self._padding,
+                     (coord[1] + self._world_y_min) * self._scale + self._padding) for coord in coords]
 
         for mva in self._mvas:
             coordinates = transform_world_to_screen(mva.area.exterior.coords)
@@ -316,8 +369,8 @@ class AtcGym(gym.Env):
 
     def _screen_vector(self, x, y):
         return np.array([
-            [(x + self._world_x0) * self._scale],
-            [(y + self._world_y0) * self._scale]
+            [(x + self._world_x_min) * self._scale],
+            [(y + self._world_y_min) * self._scale]
         ])
 
     def close(self):

@@ -133,7 +133,8 @@ class Airplane:
 
 
 class SimParameters:
-    def __init__(self, timestep, precision=0.0001):
+    def __init__(self, timestep: float, precision: float = 0.0001, reward_shaping: bool = True,
+                 normalize_state: bool = True):
         """
         Defines the simulation parameters
 
@@ -142,6 +143,8 @@ class SimParameters:
         """
         self.timestep = timestep
         self.precision = precision
+        self.reward_shaping = reward_shaping
+        self.normalize_state = normalize_state
 
 
 class Corridor:
