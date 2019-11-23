@@ -94,13 +94,52 @@ class AtcGym(gym.Env):
         state = self._get_state()
         self.state = state
 
-        # advanced award for approach sector location
-        reward_faf = 1 / np.maximum(np.power(self._d_faf, 0.2), 1)
-        reward_app_angle = np.power(
-            1 - np.abs(model.relative_angle(self._runway.phi_to_runway, self._phi_rel_faf)) / 180, 1.5)
-        reward += reward_faf * reward_app_angle * 2.0
+        # Approach sector rewards
+        reward += self._reward_approach_position(self._d_faf, self._runway.phi_to_runway, self._phi_rel_faf)
+        reward += self._reward_approach_angle(self._d_faf, self._runway.phi_to_runway,
+                                              self._phi_rel_faf, self._airplane.phi)
 
         return state, reward, self.done, {}
+
+    def _reward_approach_position(self, d_faf, phi_to_runway, phi_rel_to_faf, faf_power=0.2):
+        """
+        Provides a reward based upon the position of the aircraft in relation to the final approach course
+
+        The closer the plane is to the FAF, along the approach course, of the side away from the runway the higher
+        the reward given by this function.
+
+        :param d_faf: Distance to the faf, in nm
+        :param phi_to_runway: Approach course/Runway heading
+        :param phi_rel_to_faf: Angle of the airplane to the FAF
+        :param faf_power: Determines the fall-off based upon the distance. Use larger values for rewards only close
+        to the FAF
+        :return: Reward factor, between 0.0 and 4.0
+        """
+        # advanced award for approach sector location
+        reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
+        reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
+        return reward_faf * reward_app_angle * 4.0
+
+    def _reward_approach_angle(self, d_faf, phi_to_runway, phi_rel_to_faf, phi_plane):
+        """
+        Provides a reward based upon the angle of the aircraft relative to an intercept of the approach course.
+
+        Weighted by the distance to the FAF.
+
+        :param d_faf: Distance to the faf, in nm
+        :param phi_to_runway: Approach course/Runway heading
+        :param phi_rel_to_faf: Angle of the airplane to the FAF
+        :param phi_plane: Heading of the plane
+        :return: Reward factor, between 0.0 and 3.0
+        """
+        def reward_model(angle):
+            return np.power(-np.power((angle - 22.5) / 202, 2) + 1, 32)
+
+        plane_to_runway = model.relative_angle(phi_to_runway, phi_plane)
+        side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
+        position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
+
+        return reward_model(side * plane_to_runway) * position_factor * 3.0
 
     def _get_state(self):
         try:
