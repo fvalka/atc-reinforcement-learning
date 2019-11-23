@@ -10,20 +10,33 @@ from stable_baselines import PPO2
 from stable_baselines.bench import Monitor
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.schedules import LinearSchedule
-from stable_baselines.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
+from stable_baselines.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv, VecVideoRecorder
 
 # noinspection PyUnresolvedReferences
 import envs.atc.atc_gym
 
 
-def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = int(1e6)):
+def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: bool = True):
+    def callback(locals_, globals_):
+        pass
+
+    def video_trigger(step):
+        # allow warm-up for video recording
+        if not record_video or step < time_steps/3:
+            return False
+
+        return step % (time_steps/8) == 0
+
     log_dir = "../logs/%s/" % datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
 
     log_dir_tensorboard = "../logs/tensorboard/"
     print("Tensorboard log directory: %s" % os.path.abspath(log_dir_tensorboard))
 
-    model_dir = "%s/%s/" % (log_dir, "model")
+    model_dir = os.path.join(log_dir, "model")
     os.makedirs(model_dir, exist_ok=True)
+
+    video_dir = os.path.join(log_dir, "videos")
+    os.makedirs(video_dir, exist_ok=True)
 
     def make_env():
         log_dir_single = "%s/%s/" % (log_dir, uuid.uuid4())
@@ -39,8 +52,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
     else:
         env = DummyVecEnv([lambda: make_env()])
 
-    if normalize:
-        env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.)
+    env = VecVideoRecorder(env, video_dir, video_trigger, video_length=2000)
 
     hyperparams = {"n_steps": 1024,
                    "nminibatches": 32,
@@ -55,7 +67,7 @@ def learn(multiprocess: bool = True, normalize: bool = True, time_steps: int = i
 
     model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir_tensorboard, **hyperparams)
     # model = ACKTR(MlpPolicy, env, verbose=1)
-    model.learn(total_timesteps=time_steps)
+    model.learn(total_timesteps=time_steps, callback=callback)
 
     model.save("%s/PPO2_atc_gym" % model_dir)
 
