@@ -30,6 +30,10 @@ class AtcGym(gym.Env):
         world_y_length = self._world_y_max - self._world_y_min
         world_max_distance = np.hypot(world_x_length, world_y_length)
 
+        self.done = True
+        self.reset()
+        self.viewer = None
+
         self.normalization_action_offset = np.array([self._airplane.v_min, 0, 0])
         self.normalization_action_factor = np.array([self._airplane.v_max - self._airplane.v_min,
                                                      self._airplane.h_max,
@@ -65,11 +69,7 @@ class AtcGym(gym.Env):
         self.observation_space = gym.spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1, -1, -1, -1]),
                                                 high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]))
 
-        self.reward_range = (-300.0, 100.0)
-
-        self.done = True
-        self.reset()
-        self.viewer = None
+        self.reward_range = (-300.0, 1000.0)
 
     def seed(self, seed=None):
         """
@@ -94,9 +94,9 @@ class AtcGym(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
         def denormalized_action(index):
-            return action[index] * self.normalization_action_factor/2 + \
-                   self.normalization_action_factor/2 + \
-                   self.normalization_action_offset
+            return action[index] * self.normalization_action_factor[index]/2 + \
+                   self.normalization_action_factor[index]/2 + \
+                   self.normalization_action_offset[index]
 
         reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
         reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
@@ -153,9 +153,10 @@ class AtcGym(gym.Env):
         :param phi_rel_to_faf: Angle of the airplane to the FAF
         :return: Reward factor
         """
-        on_gp_altitude = np.tan(np.radians(3)) * d_faf + self._faf_mva
+        on_gp_altitude = np.tan(np.radians(3)) * d_faf * model.nautical_miles_to_feet + self._faf_mva
         position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
-        return np.abs(h - on_gp_altitude) * position_factor * 20.0
+        altitude_diff_factor = 1 - np.abs(h - on_gp_altitude) / self._airplane.h_max
+        return altitude_diff_factor * position_factor * 4.0
 
     def _reward_approach_position(self, d_faf, phi_to_runway, phi_rel_to_faf, faf_power=0.2):
         """
@@ -174,7 +175,7 @@ class AtcGym(gym.Env):
         # advanced award for approach sector location
         reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
-        return reward_faf * reward_app_angle * 20.0
+        return reward_faf * reward_app_angle * 4.0
 
     def _reward_approach_angle(self, d_faf, phi_to_runway, phi_rel_to_faf, phi_plane):
         """
@@ -196,7 +197,7 @@ class AtcGym(gym.Env):
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
         position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
 
-        return reward_model(side * plane_to_runway) * position_factor * 20.0
+        return reward_model(side * plane_to_runway) * position_factor * 4.0
 
     def _get_state(self):
         try:
@@ -210,7 +211,7 @@ class AtcGym(gym.Env):
         to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
         to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
         phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
-        self._d_faf = np.sqrt(np.hypot(to_faf_x, to_faf_y) ** 2 + self._faf_mva ** 2)
+        self._d_faf = np.hypot(to_faf_x, to_faf_y)
         self._phi_rel_faf = np.degrees(np.arctan2(to_faf_y, to_faf_x))
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
                           self._airplane.v, self._airplane.h - mva, self._d_faf, self._phi_rel_faf, phi_rel_runway],
@@ -237,13 +238,14 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 9, 30, 16000, 90, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 27, 11, 16000, 350, 250)
         self.state = self._get_state()
         return self.state
 
     def render(self, mode='human'):
         """
         Rendering the environments state
+        :type mode: Either "human" for direct to screen rendering or "rgb_array"
         """
         if self.viewer is None:
             self._padding = 10
@@ -277,6 +279,14 @@ class AtcGym(gym.Env):
         return self.viewer.render(mode == 'rgb_array')
 
     def _render_airplane(self, airplane: model.Airplane):
+        """
+        Renders the airplane symbol and adjacent information onto the screen
+
+        Already supports multiple airplanes in the environment.
+
+        :param airplane: Airplane to render
+        :return: None
+        """
         render_size = 4
         vector = self._screen_vector(airplane.x, airplane.y)
         corner_vector = np.array([[0], [render_size]])
@@ -310,6 +320,13 @@ class AtcGym(gym.Env):
                 self.viewer.add_onetime(circle)
 
     def _render_approach(self):
+        """
+        Render the approach path on the screen
+
+        Currently only supports a single runway and a single approach corridor
+
+        :return: None
+        """
         iaf_x = self._runway.corridor.iaf[0][0]
         iaf_y = self._runway.corridor.iaf[1][0]
         dashes = 48
@@ -323,6 +340,13 @@ class AtcGym(gym.Env):
             self.viewer.add_geom(dash)
 
     def _render_faf(self):
+        """
+        Renders the final approach fix symbol onto the screen
+
+        Currently only supports a single runway and a single approach corridor
+
+        :return: None
+        """
         faf_screen_render_size = 6
 
         faf_x = self._runway.corridor.faf[0][0]
@@ -340,6 +364,11 @@ class AtcGym(gym.Env):
         self.viewer.add_geom(poly_line)
 
     def _render_mvas(self):
+        """
+        Renders the outlines of the minimum vectoring altitudes onto the screen.
+
+        :return: None
+        """
         def transform_world_to_screen(coords):
             return [((coord[0] + self._world_x_min) * self._scale + self._padding,
                      (coord[1] + self._world_y_min) * self._scale + self._padding) for coord in coords]
@@ -357,6 +386,12 @@ class AtcGym(gym.Env):
             self.viewer.add_geom(outline)
 
     def _render_runway(self):
+        """
+        Renders the runway symbol onto the screen
+
+        Currently only supports a single runway and a single approach corridor
+        :return: None
+        """
         runway_length = 1.7 * self._scale
         runway_to_threshold_vector = \
             np.dot(model.rot_matrix(self._runway.phi_from_runway), np.array([[0], [runway_length / 2]]))
@@ -368,9 +403,15 @@ class AtcGym(gym.Env):
         self.viewer.add_geom(runway_line)
 
     def _screen_vector(self, x, y):
+        """
+        Converts an in world vector to an on screen vector by shifting and scaling
+        :param x: World vector x
+        :param y: World vector y
+        :return: Numpy array vector with on screen coordinates
+        """
         return np.array([
-            [(x + self._world_x_min) * self._scale],
-            [(y + self._world_y_min) * self._scale]
+            [(x - self._world_x_min) * self._scale],
+            [(y - self._world_y_min) * self._scale]
         ])
 
     def close(self):
