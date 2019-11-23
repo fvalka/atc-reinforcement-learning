@@ -17,7 +17,7 @@ import envs.atc.atc_gym
 
 def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=5000, hyperparams=None,
                             n_jobs=1, sampler_method='random', pruner_method='halving',
-                            seed=0, verbose=1):
+                            seed=0, verbose=1, timeout=None):
     """
     :param algo: (str)
     :param model_fn: (func) function that is used to instantiate the model
@@ -69,8 +69,8 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
     if verbose > 0:
         print("Sampler: {} - Pruner: {}".format(sampler_method, pruner_method))
 
-    study = optuna.load_study(study_name="distributed-atc-gym-2",
-                              storage="sqlite:///c:/Users/Fabian Valka/Documents/privat/prj/atc-reinforcement-learning/optuna/gym.db",
+    study = optuna.load_study(study_name="distributed-atc-gym-3",
+                              storage="sqlite:///c:/Users/Fabian Valka/Documents/privat/prj/atc-reinforcement-learning/optuna/gym3.db",
                               sampler=sampler, pruner=pruner)
     #study = optuna.create_study(sampler=sampler, pruner=pruner)
     algo_sampler = HYPERPARAMS_SAMPLER[algo]
@@ -183,7 +183,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
         return cost
 
     try:
-        study.optimize(objective, n_trials=n_trials, n_jobs=n_jobs)
+        study.optimize(objective, n_trials=n_trials, n_jobs=n_jobs, timeout=timeout, catch=((ValueError, AssertionError)))
     except KeyboardInterrupt:
         pass
 

@@ -1,6 +1,7 @@
 import datetime
 import os
 import uuid
+from typing import Optional
 
 import gym
 import yaml
@@ -14,12 +15,13 @@ from learning import hyperparam_optimization
 
 
 class TuningParameters:
-    n_trials: int
+    timeout: Optional[float]
+    n_trials: Optional[int]
     n_timesteps: int
     sampler: str
     pruner: str
 
-    def __init__(self, n_trials: int, n_timesteps: int, sampler: str, pruner: str):
+    def __init__(self, n_trials: Optional[int], n_timesteps: int, timeout: Optional[float], sampler: str, pruner: str):
         """
         Parameters for tuning the hypertuner
 
@@ -28,6 +30,7 @@ class TuningParameters:
         :param sampler: Name of the sampler which is used. Supports: "random", "tpe", "skopt"
         :param pruner: Name of the pruner which is used. Supports: "halving", "median", "none"
         """
+        self.timeout = timeout
         self.n_trials = n_trials
         self.n_timesteps = n_timesteps
         self.sampler = sampler
@@ -103,6 +106,7 @@ def tune(params: TuningParameters):
                                                                  n_timesteps=params.n_timesteps,
                                                                  sampler_method=params.sampler,
                                                                  pruner_method=params.pruner,
+                                                                 timeout=params.timeout,
                                                                  n_jobs=16)
 
     report_name = "report_{}-trials-{}-{}-{}.csv".format(params.n_trials, params.n_timesteps,
@@ -116,5 +120,6 @@ def tune(params: TuningParameters):
 
 if __name__ == '__main__':
     # freeze_support()
-    parameters = TuningParameters(n_trials=20, n_timesteps=int(1e5), sampler="tpe", pruner="halving")
+    parameters = TuningParameters(n_trials=None, n_timesteps=int(1e5),
+                                  sampler="tpe", pruner="halving", timeout=3600*7)
     tune(parameters)
