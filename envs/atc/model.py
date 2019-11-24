@@ -165,7 +165,7 @@ class Corridor:
         self.phi_from_runway = phi_from_runway
         self.phi_to_runway = (phi_from_runway + 180) % 360
 
-        faf_threshold_distance = 8
+        faf_threshold_distance = 7.4
         faf_angle = 45
         self.faf_angle = faf_angle
         faf_iaf_distance = 3
@@ -277,9 +277,13 @@ class Airspace:
 
         :return Tuple with minx, miny, maxx, maxy
         """
+        combined_poly = self.get_outline_polygon()
+        return combined_poly.bounds
+
+    def get_outline_polygon(self):
         polys: List[geom.polygon] = [mva.area for mva in self.mvas]
         combined_poly = shapely.ops.unary_union(polys)
-        return combined_poly.bounds
+        return combined_poly
 
 
 def relative_angle(angle1, angle2):

@@ -1,15 +1,13 @@
-from typing import List
-
 import gym
 import gym.spaces
 import numpy as np
-import shapely.geometry as shape
 from gym.envs.classic_control import rendering
 from gym.utils import seeding
 
 from envs.atc.rendering import Label
 from envs.atc.themes import ColorScheme
 from . import model
+from. import scenarios
 
 
 class AtcGym(gym.Env):
@@ -18,12 +16,15 @@ class AtcGym(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self, sim_parameters=model.SimParameters(1)):
+    def __init__(self, sim_parameters=model.SimParameters(1), scenario=scenarios.LOWW()):
+        self.last_reward = 0
+        self.total_reward = 0
+
         self._sim_parameters = sim_parameters
 
-        self._mvas = self._generate_mvas()
-        self._runway = self._generate_runway()
-        self._airspace = self._generate_airspace(self._mvas, self._runway)
+        self._mvas = scenario.mvas
+        self._runway = scenario.runway
+        self._airspace = scenario.airspace
         self._faf_mva = self._airspace.get_mva_height(self._runway.corridor.faf[0][0], self._runway.corridor.faf[1][0])
 
         bbox = self._airspace.get_bounding_box()
@@ -104,7 +105,7 @@ class AtcGym(gym.Env):
                    self.normalization_action_offset[index]
 
         reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
-        reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
+        #reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
         reward += self._action_with_reward(self._airplane.action_phi, denormalized_action(2))
 
         self._airplane.step()
@@ -145,6 +146,8 @@ class AtcGym(gym.Env):
             state = (state - self.normalization_state_min - 0.5 * self.normalization_state_max) \
                     / (0.5 * self.normalization_state_max)
 
+        self.last_reward = reward
+        self.total_reward += reward
         return state, reward, self.done, {}
 
     def _reward_glideslope(self, d_faf, h, phi_to_runway, phi_rel_to_faf):
@@ -243,7 +246,8 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 9, 30, 16000, 90, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 10, 51, 16000, 90, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 47.2, 35.1, 2700, 359, 250)
         self.state = self._get_state()
         return self.state
 
@@ -280,8 +284,19 @@ class AtcGym(gym.Env):
             self._render_approach()
 
         self._render_airplane(self._airplane)
+        self._render_reward()
 
         return self.viewer.render(mode == 'rgb_array')
+
+    def _render_reward(self):
+        total_reward = "Total reward: %.2f" % self.total_reward
+        last_reward = "Last reward: %.2f" % self.last_reward
+
+        label_total = Label(total_reward, 10, 40, bold=False)
+        label_last = Label(last_reward, 10, 25, bold=False)
+
+        self.viewer.add_onetime(label_total)
+        self.viewer.add_onetime(label_last)
 
     def _render_airplane(self, airplane: model.Airplane):
         """
@@ -336,7 +351,7 @@ class AtcGym(gym.Env):
         iaf_y = self._runway.corridor.iaf[1][0]
         dashes = 48
         runway_vector = self._screen_vector(self._runway.x, self._runway.y)
-        runway_iaf = self._screen_vector(iaf_x - self._runway.x, iaf_y - self._runway.y)
+        runway_iaf = np.array([[iaf_x - self._runway.x], [iaf_y - self._runway.y]]) * self._scale
         for i in range(int(dashes / 2 + 1)):
             start = runway_vector + runway_iaf / dashes * 2 * i
             end = runway_vector + runway_iaf / dashes * (2 * i + 1)
@@ -376,8 +391,8 @@ class AtcGym(gym.Env):
         """
 
         def transform_world_to_screen(coords):
-            return [((coord[0] + self._world_x_min) * self._scale + self._padding,
-                     (coord[1] + self._world_y_min) * self._scale + self._padding) for coord in coords]
+            return [((coord[0] - self._world_x_min) * self._scale + self._padding,
+                     (coord[1] - self._world_y_min) * self._scale + self._padding) for coord in coords]
 
         for mva in self._mvas:
             coordinates = transform_world_to_screen(mva.area.exterior.coords)
@@ -424,24 +439,3 @@ class AtcGym(gym.Env):
         if self.viewer is not None:
             self.viewer.close()
             self.viewer = None
-
-    def _generate_mvas(self) -> List[model.MinimumVectoringAltitude]:
-        mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
-        mva_2 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 26), (35, 30), (15, 30), (15, 27.8)]), 2400)
-        mva_3 = model.MinimumVectoringAltitude(shape.Polygon([(15, 30), (35, 30), (35, 40), (15, 40)]), 4000)
-        mva_4 = model.MinimumVectoringAltitude(shape.Polygon([(0, 10), (15, 0), (15, 28.7), (0, 17)]), 8000)
-        mva_5 = model.MinimumVectoringAltitude(shape.Polygon([(0, 17), (15, 28.7), (15, 40), (0, 32)]), 6500)
-        mvas = [mva_1, mva_2, mva_3, mva_4, mva_5]
-        return mvas
-
-    def _generate_airspace(self, mvas: List[model.MinimumVectoringAltitude], runway: model.Runway) -> model.Airspace:
-        airspace = model.Airspace(mvas, runway)
-        return airspace
-
-    def _generate_runway(self) -> model.Runway:
-        x = 20
-        y = 20
-        h = 0
-        phi = 130
-        runway = model.Runway(x, y, h, phi)
-        return runway

@@ -81,4 +81,4 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(2e6), multiprocess=True, record_video=False)
+    learn(time_steps=int(4e6), multiprocess=True, record_video=False)
