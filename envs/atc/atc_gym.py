@@ -13,6 +13,11 @@ from . import model
 
 
 class AtcGym(gym.Env):
+    metadata = {
+        'render.modes': ['human', 'rgb_array'],
+        'video.frames_per_second': 50
+    }
+
     def __init__(self, sim_parameters=model.SimParameters(1)):
         self._sim_parameters = sim_parameters
 
@@ -89,13 +94,13 @@ class AtcGym(gym.Env):
         :return: Reward obtained from this step
         """
         self.done = False
-        reward = -0.2 * self._sim_parameters.timestep
+        reward = -0.05 * self._sim_parameters.timestep
 
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
         def denormalized_action(index):
-            return action[index] * self.normalization_action_factor[index]/2 + \
-                   self.normalization_action_factor[index]/2 + \
+            return action[index] * self.normalization_action_factor[index] / 2 + \
+                   self.normalization_action_factor[index] / 2 + \
                    self.normalization_action_offset[index]
 
         reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
@@ -122,7 +127,7 @@ class AtcGym(gym.Env):
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
-            reward = 100
+            reward = 8000
             self.done = True
 
         state = self._get_state()
@@ -156,7 +161,7 @@ class AtcGym(gym.Env):
         on_gp_altitude = np.tan(np.radians(3)) * d_faf * model.nautical_miles_to_feet + self._faf_mva
         position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
         altitude_diff_factor = 1 - np.abs(h - on_gp_altitude) / self._airplane.h_max
-        return altitude_diff_factor * position_factor * 4.0
+        return altitude_diff_factor * position_factor * 1.2
 
     def _reward_approach_position(self, d_faf, phi_to_runway, phi_rel_to_faf, faf_power=0.2):
         """
@@ -175,7 +180,7 @@ class AtcGym(gym.Env):
         # advanced award for approach sector location
         reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
-        return reward_faf * reward_app_angle * 4.0
+        return reward_faf * reward_app_angle * 0.8
 
     def _reward_approach_angle(self, d_faf, phi_to_runway, phi_rel_to_faf, phi_plane):
         """
@@ -197,7 +202,7 @@ class AtcGym(gym.Env):
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
         position_factor = self._reward_approach_position(d_faf, phi_to_runway, phi_rel_to_faf, 0.4)
 
-        return reward_model(side * plane_to_runway) * position_factor * 4.0
+        return reward_model(side * plane_to_runway) * position_factor * 0.8
 
     def _get_state(self):
         try:
@@ -238,7 +243,7 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 27, 11, 16000, 350, 250)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 9, 30, 16000, 90, 250)
         self.state = self._get_state()
         return self.state
 
@@ -369,6 +374,7 @@ class AtcGym(gym.Env):
 
         :return: None
         """
+
         def transform_world_to_screen(coords):
             return [((coord[0] + self._world_x_min) * self._scale + self._padding,
                      (coord[1] + self._world_y_min) * self._scale + self._padding) for coord in coords]

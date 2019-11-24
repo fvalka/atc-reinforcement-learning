@@ -1,16 +1,16 @@
 import datetime
 import os
-import yaml
 import uuid
 from multiprocessing import freeze_support
 
 import gym
+import yaml
 from gym.wrappers import TimeLimit
 from stable_baselines import PPO2
 from stable_baselines.bench import Monitor
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.schedules import LinearSchedule
-from stable_baselines.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv, VecVideoRecorder
+from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
 
 # noinspection PyUnresolvedReferences
 import envs.atc.atc_gym
@@ -25,7 +25,7 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
         if not record_video or step < time_steps/3:
             return False
 
-        return step % (time_steps/8) == 0
+        return step % (int(time_steps/8)) == 0
 
     log_dir = "../logs/%s/" % datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
 
@@ -52,16 +52,17 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     else:
         env = DummyVecEnv([lambda: make_env()])
 
-    env = VecVideoRecorder(env, video_dir, video_trigger, video_length=2000)
+    if record_video:
+        env = VecVideoRecorder(env, video_dir, video_trigger, video_length=2000)
 
     hyperparams = {"n_steps": 1024,
                    "nminibatches": 32,
-                   "cliprange": 0.4,
-                   "gamma": 0.99,
+                   "cliprange": 0.3,
+                   "gamma": 0.993,
                    "lam": 0.95,
-                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0005, final_p=0.001).value(step),
+                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0002, final_p=0.001).value(step),
                    "noptepochs": 20,
-                   "ent_coef": 0.01}
+                   "ent_coef": 0.0025}
 
     yaml.dump(hyperparams, open(os.path.join(model_dir, "hyperparams.yml"), "w+"))
 
@@ -80,4 +81,4 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(5e6), multiprocess=True)
+    learn(time_steps=int(2e6), multiprocess=True, record_video=False)
