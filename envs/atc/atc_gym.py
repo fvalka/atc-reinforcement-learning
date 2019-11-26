@@ -7,7 +7,7 @@ from gym.utils import seeding
 from envs.atc.rendering import Label
 from envs.atc.themes import ColorScheme
 from . import model
-from. import scenarios
+from . import scenarios
 
 
 class AtcGym(gym.Env):
@@ -105,7 +105,7 @@ class AtcGym(gym.Env):
                    self.normalization_action_offset[index]
 
         reward += self._action_with_reward(self._airplane.action_v, denormalized_action(0))
-        #reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
+        reward += self._action_with_reward(self._airplane.action_h, denormalized_action(1))
         reward += self._action_with_reward(self._airplane.action_phi, denormalized_action(2))
 
         self._airplane.step()
@@ -247,8 +247,9 @@ class AtcGym(gym.Env):
         """
         self.done = False
         self._airplane = model.Airplane(self._sim_parameters, "FLT01", 10, 51, 16000, 90, 250)
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 47.2, 35.1, 2700, 359, 250)
         self.state = self._get_state()
+        self.total_reward = 0
+        self.last_reward = 0
         return self.state
 
     def render(self, mode='human'):
@@ -400,6 +401,9 @@ class AtcGym(gym.Env):
             fill = rendering.FilledPolygon(coordinates)
             fill.set_color(*ColorScheme.background_active)
             self.viewer.add_geom(fill)
+
+        for mva in self._mvas:
+            coordinates = transform_world_to_screen(mva.area.exterior.coords)
 
             outline = rendering.PolyLine(coordinates, True)
             outline.set_linewidth(1)

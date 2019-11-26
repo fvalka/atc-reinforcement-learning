@@ -46,7 +46,7 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
         env = Monitor(env, log_dir_single, allow_early_resets=True)
         return env
 
-    n_envs = 8
+    n_envs = 24
     if multiprocess:
         env = SubprocVecEnv([lambda: make_env() for i in range(n_envs)])
     else:
@@ -58,11 +58,11 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     hyperparams = {"n_steps": 1024,
                    "nminibatches": 32,
                    "cliprange": 0.3,
-                   "gamma": 0.993,
+                   "gamma": 0.995,
                    "lam": 0.95,
-                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0002, final_p=0.001).value(step),
+                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0001, final_p=0.001).value(step),
                    "noptepochs": 20,
-                   "ent_coef": 0.0025}
+                   "ent_coef": 0.007}
 
     yaml.dump(hyperparams, open(os.path.join(model_dir, "hyperparams.yml"), "w+"))
 
@@ -81,4 +81,4 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(4e6), multiprocess=True, record_video=False)
+    learn(time_steps=int(24e6), multiprocess=True, record_video=False)
