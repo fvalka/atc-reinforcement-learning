@@ -101,8 +101,6 @@ python-dateutil==2.8.1
 python-editor==1.0.4
 python-utils==2.3.0
 pytz==2019.3
-pywin32==223
-pywinpty==0.5.5
 PyYAML==5.1.2
 pyzmq==18.1.1
 qtconsole==4.6.0
@@ -132,9 +130,6 @@ urllib3==1.24.2
 wcwidth==0.1.7
 webencodings==0.5.1
 Werkzeug==0.16.0
-widgetsnbextension==3.5.1
-win-inet-pton==1.1.0
-wincertstore==0.2
 wrapt==1.11.2
 zipp==0.6.0
 zmq==0.0.0
