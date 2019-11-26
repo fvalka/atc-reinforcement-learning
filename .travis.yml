@@ -6,6 +6,7 @@ before_install:
   - sudo apt-get -y install python-opengl xvfb
 install:
   - pip install -r requirements.txt
+  - pip install -e git+https://github.com/openai/baselines.git@9ee399f5b20cd70ac0a871927a6cf043b478193f#egg=baselines
 script:
   - xvfb-run -s "-screen 0 1920x1080x24" pytest --cov=./simulation/
 after_success:
