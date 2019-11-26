@@ -18,8 +18,6 @@ cmd2==0.8.9
 codecov==2.0.15
 colorama==0.4.1
 colorlog==4.0.2
-conda==4.7.12
-conda-package-handling==1.6.0
 coverage==4.5.4
 cryptography==2.8
 cycler==0.10.0
