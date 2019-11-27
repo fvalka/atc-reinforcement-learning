@@ -69,7 +69,7 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     if record_video:
         env = VecVideoRecorder(env, video_dir, video_trigger, video_length=2000)
 
-    hyperparams = {"n_steps": 1024,
+    hyperparams = {"n_steps": 2048,
                    "nminibatches": 32,
                    "cliprange": 0.3,
                    "gamma": 0.995,
@@ -86,13 +86,17 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
     model.save("%s/PPO2_atc_gym" % model_dir)
 
-    obs = env.reset()
+    new_env = gym.make('AtcEnv-v0')
+
+    obs = new_env.reset()
     while True:
         action, _states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
-        env.render()
+        obs, rewards, done, info = new_env.step(action)
+        new_env.render()
+        if done:
+            obs = new_env.reset()
 
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(1e6), multiprocess=True, record_video=False)
+    learn(time_steps=int(1e5), multiprocess=True, record_video=False)

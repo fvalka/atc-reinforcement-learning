@@ -1,3 +1,5 @@
+import random
+
 import gym
 import gym.spaces
 import numpy as np
@@ -31,6 +33,7 @@ class AtcGym(gym.Env):
 
         self._sim_parameters = sim_parameters
 
+        self._scenario = scenario
         self._mvas = scenario.mvas
         self._runway = scenario.runway
         self._airspace = scenario.airspace
@@ -50,14 +53,25 @@ class AtcGym(gym.Env):
         self.viewer = None
 
         self.normalization_action_offset = np.array([self._airplane.v_min, 0, 0])
-        self.normalization_action_factor = np.array([10,
-                                                     100,
-                                                     1])
 
-        # action space structure: v, h, phi
-        self.action_space = gym.spaces.MultiDiscrete([int((self._airplane.v_max - self._airplane.v_min)/10),
-                                                      int(self._airplane.h_max/100),
-                                                      360])
+        if sim_parameters.discrete_action_space:
+            self.normalization_action_factor = np.array([10,
+                                                         100,
+                                                         1])
+
+            # action space structure: v, h, phi
+            self.action_space = gym.spaces.MultiDiscrete([int((self._airplane.v_max - self._airplane.v_min) / 10),
+                                                          int(self._airplane.h_max / 100),
+                                                          360])
+        else:
+            self.normalization_action_factor = np.array([self._airplane.v_max - self._airplane.v_min,
+                                                         self._airplane.h_max,
+                                                         360])
+
+            # action space structure: v, h, phi
+            self.action_space = gym.spaces.Box(low=np.array([-1, -1, -1]),
+                                               high=np.array([1, 1, 1]))
+
         self.last_action = [0, 0, 0]
 
         self.normalization_state_min = np.array([
@@ -96,6 +110,7 @@ class AtcGym(gym.Env):
         :return:
         """
         self.np_random, seed = seeding.np_random(seed)
+        random.seed(seed)
         return [seed]
 
     def step(self, action):
@@ -135,6 +150,7 @@ class AtcGym(gym.Env):
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
+            self._won_simulations_ignoring_resets += 1
             reward = 8000
             self.done = True
 
@@ -143,12 +159,14 @@ class AtcGym(gym.Env):
 
         # Reward shaping rewards for approach sector position and glideslope
         if self._sim_parameters.reward_shaping:
-            app_position_reward = self._reward_approach_position(self._d_faf, self._runway.phi_to_runway, self._phi_rel_faf)
+            app_position_reward = self._reward_approach_position(self._d_faf, self._runway.phi_to_runway,
+                                                                 self._phi_rel_faf)
             reward += app_position_reward
             reward += self._reward_approach_angle(self._d_faf, self._runway.phi_to_runway,
                                                   self._phi_rel_faf, self._airplane.phi, app_position_reward)
             reward += self._reward_glideslope(self._d_faf, self._airplane.h,
-                                              self._runway.phi_to_runway, self._phi_rel_faf, app_position_reward)
+                                              self._runway.phi_to_runway, self._phi_rel_faf,
+                                              app_position_reward, self._faf_mva)
 
         if self._sim_parameters.normalize_state:
             state = (state - self.normalization_state_min - 0.5 * self.normalization_state_max) \
@@ -187,7 +205,9 @@ class AtcGym(gym.Env):
         reward_app_angle = (abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0) ** 1.5
         return reward_faf * reward_app_angle * 0.8
 
-    def _reward_glideslope(self, d_faf, h, phi_to_runway, phi_rel_to_faf, position_factor):
+    @staticmethod
+    @jit(nopython=True)
+    def _reward_glideslope(d_faf, h, phi_to_runway, phi_rel_to_faf, position_factor, faf_altitude):
         """
         Calculates a reward based upon the on glideslope performance of the airplane, weighted with the position
         relative to the FAF.
@@ -198,8 +218,9 @@ class AtcGym(gym.Env):
         :param phi_rel_to_faf: Angle of the airplane to the FAF
         :return: Reward factor
         """
-        on_gp_altitude = np.tan(np.radians(3)) * d_faf * model.nautical_miles_to_feet + self._faf_mva
-        altitude_diff_factor = 1 - np.abs(h - on_gp_altitude) / self._airplane.h_max
+        # base calculation, glideslope of 3 deg np.tan(np.radians(3)) * model.nautical_miles_to_feet
+        on_gp_altitude = 318.4 * d_faf + faf_altitude
+        altitude_diff_factor = 1 - abs(h - on_gp_altitude) / 40000.0
         return altitude_diff_factor * position_factor * 1.2
 
     @staticmethod
@@ -238,13 +259,10 @@ class AtcGym(gym.Env):
         return state
 
     def _action_with_reward(self, func, action, index):
-        def denormalized_action(index):
-            return action[index] * self.normalization_action_factor[index] + \
-                   self.normalization_action_offset[index]
-        action_to_take = denormalized_action(index)
+        action_to_take = self._denormalized_action(action[index], index)
         try:
             func(action_to_take)
-            if not action_to_take == self.last_action[index]:
+            if not action_to_take - self.last_action[index] < self._sim_parameters.precision:
                 self.actions_taken += 1
                 self._actions_ignoring_resets += 1
                 return -0.005
@@ -256,6 +274,25 @@ class AtcGym(gym.Env):
             return -1.0
         return 0.0
 
+    def _denormalized_action(self, action, index):
+        return self._denormalized_action_optimized(action, index, self._sim_parameters.discrete_action_space,
+                                                   self.normalization_action_factor, self.normalization_action_offset)
+
+    @staticmethod
+    @jit(nopython=True)
+    def _denormalized_action_optimized(action, index, discrete_action_space,
+                                       normalization_action_factor,
+                                       normalization_action_offset):
+        if discrete_action_space:
+            # action space can not be centered for discrete action space
+            return action * normalization_action_factor[index] + \
+                   normalization_action_offset[index]
+        else:
+            # action space needs to be centered for normalization
+            return action * normalization_action_factor[index] / 2 + \
+                   normalization_action_factor[index] / 2 + \
+                   normalization_action_offset[index]
+
     def reset(self):
         """
         Reset the environment
@@ -264,7 +301,10 @@ class AtcGym(gym.Env):
         :return:
         """
         self.done = False
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 10, 51, 16000, 90, 250)
+
+        entry_point = random.choice(self._scenario.entrypoints)
+        self._airplane = model.Airplane(self._sim_parameters, "FLT01", entry_point.x, entry_point.y,
+                                        random.choice(entry_point.levels) * 100, entry_point.phi, 250)
         # only for testing/debuging, position next to FAF:
         # self._airplane = model.Airplane(self._sim_parameters, "FLT01", 47.3, 34.5, 16000, 335, 250)
         self.state = self._get_state(0)

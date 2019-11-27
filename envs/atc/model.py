@@ -1,4 +1,5 @@
 import math
+import random
 from typing import List
 
 import numpy as np
@@ -48,6 +49,7 @@ class Airplane:
         self.phi_dot_max = 3
         self.phi_dot_min = -3
         self.position_history = []
+        self.id = random.randint(0, 32767)
 
     def above_mva(self, mvas):
         for mva in mvas:
@@ -135,7 +137,7 @@ class Airplane:
 
 class SimParameters:
     def __init__(self, timestep: float, precision: float = 0.0001, reward_shaping: bool = True,
-                 normalize_state: bool = True):
+                 normalize_state: bool = True, discrete_action_space: bool = False):
         """
         Defines the simulation parameters
 
@@ -146,6 +148,7 @@ class SimParameters:
         self.precision = precision
         self.reward_shaping = reward_shaping
         self.normalize_state = normalize_state
+        self.discrete_action_space = discrete_action_space
 
 
 class Corridor:
@@ -225,10 +228,10 @@ class Corridor:
         )[0][0]
         min_angle = self.faf_angle - beta
         if ray_tracing(x, y, self.corridor1_list) and min_angle <= relative_angle(to_runway,
-                                                                                       phi) <= self.faf_angle:
+                                                                                  phi) <= self.faf_angle:
             direction_correct = True
         elif ray_tracing(x, y, self.corridor2_list) and min_angle <= relative_angle(phi,
-                                                                                         to_runway) <= self.faf_angle:
+                                                                                    to_runway) <= self.faf_angle:
             direction_correct = True
 
         return direction_correct
@@ -268,6 +271,7 @@ class MinimumVectoringAltitude:
         self.area = area
         self.height = height
         self.area_as_list = np.array(list(area.exterior.coords))
+        self.outer_bounds = area.bounds
 
 
 class Airspace:
@@ -283,8 +287,11 @@ class Airspace:
 
     def find_mva(self, x, y):
         for mva in self.mvas:
-            if ray_tracing(x, y, mva.area_as_list):
-                return mva
+            bounds = mva.outer_bounds
+            # tuple with minx, miny, maxx, maxy
+            if bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]:
+                if ray_tracing(x, y, mva.area_as_list):
+                    return mva
         raise ValueError('Outside of airspace')
 
     def get_mva_height(self, x, y):
@@ -303,27 +310,38 @@ class Airspace:
         polys: List[geom.polygon] = [mva.area for mva in self.mvas]
         combined_poly = shapely.ops.unary_union(polys)
         return combined_poly
+    
+
+class EntryPoint:
+
+    def __init__(self, x: float, y: float, phi: int, levels: List[int]):
+        self.x = x
+        self.y = y
+        self.phi = phi
+        self.levels = levels
+
 
 @jit(nopython=True)
-def ray_tracing(x,y,poly):
+def ray_tracing(x, y, poly):
     n = len(poly)
     inside = False
     p2x = 0.0
     p2y = 0.0
     xints = 0.0
-    p1x,p1y = poly[0]
-    for i in range(n+1):
-        p2x,p2y = poly[i % n]
-        if y > min(p1y,p2y):
-            if y <= max(p1y,p2y):
-                if x <= max(p1x,p2x):
+    p1x, p1y = poly[0]
+    for i in range(n + 1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
                     if p1y != p2y:
-                        xints = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                        xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
                     if p1x == p2x or x <= xints:
                         inside = not inside
-        p1x,p1y = p2x,p2y
+        p1x, p1y = p2x, p2y
 
     return inside
+
 
 @jit(nopython=True)
 def relative_angle(angle1, angle2):

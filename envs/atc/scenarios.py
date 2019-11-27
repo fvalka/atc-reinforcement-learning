@@ -8,6 +8,7 @@ class Scenario:
     runway: model.Runway
     mvas: List[model.MinimumVectoringAltitude]
     airspace: model.Airspace
+    entrypoints: List[model.EntryPoint]
 
 
 class SimpleScenario(Scenario):
@@ -184,3 +185,15 @@ class LOWW(Scenario):
         self.runway = model.Runway(45.16, 43.26, 586, 160)
 
         self.airspace = model.Airspace(self.mvas, self.runway)
+
+        self.entrypoints = [
+            model.EntryPoint(10, 51, 90, [130, 150, 170, 190, 210, 230]),
+            model.EntryPoint(17, 74.6, 120, [130, 150, 170, 190, 210, 230]),
+            model.EntryPoint(19.0, 34.0, 45, [130, 150, 170, 190, 210, 230]),
+            model.EntryPoint(29.8, 79.4, 170, [130, 150, 170, 190, 210, 230]),
+            model.EntryPoint(54.0, 80.5, 230, [140, 160, 180, 200, 220, 240]),
+            model.EntryPoint(53.0, 60.0, 260, [140, 160, 180, 200, 220, 240]),
+            model.EntryPoint(66.0, 39.0, 290, [140, 160, 180, 200, 220]),
+            model.EntryPoint(64.4, 22.0, 320, [140, 160, 180, 200, 220]),
+            model.EntryPoint(46.0, 7.0, 320, [140, 160, 180, 200, 220, 240, 260])
+        ]
