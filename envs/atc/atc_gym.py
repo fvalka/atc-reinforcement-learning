@@ -180,8 +180,11 @@ class AtcGym(gym.Env):
         :return: Reward factor
         """
         # advanced award for approach sector location
+        # reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
+        #         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
+        #         return reward_faf * reward_app_angle * 0.8
         reward_faf = 1.0 / max(d_faf ** faf_power, 1.0)
-        reward_app_angle = abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0 ** 1.5
+        reward_app_angle = (abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0) ** 1.5
         return reward_faf * reward_app_angle * 0.8
 
     def _reward_glideslope(self, d_faf, h, phi_to_runway, phi_rel_to_faf, position_factor):
@@ -200,7 +203,7 @@ class AtcGym(gym.Env):
         return altitude_diff_factor * position_factor * 1.2
 
     @staticmethod
-    @jit(nopython=True)
+    #@jit(nopython=True)
     def _reward_approach_angle(d_faf, phi_to_runway, phi_rel_to_faf, phi_plane, position_factor):
         """
         Provides a reward based upon the angle of the aircraft relative to an intercept of the approach course.
