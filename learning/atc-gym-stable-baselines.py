@@ -72,9 +72,9 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     hyperparams = {"n_steps": 1024,
                    "nminibatches": 32,
                    "cliprange": 0.3,
-                   "gamma": 0.999,
+                   "gamma": 0.995,
                    "lam": 0.95,
-                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0001, final_p=0.001).value(step),
+                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.00025, final_p=0.0025).value(step),
                    "noptepochs": 4,
                    "ent_coef": 0.01}
 
