@@ -11,6 +11,8 @@ from stable_baselines.bench import Monitor
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.schedules import LinearSchedule
 from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
+import tensorflow as tf
+import numpy as np
 
 # noinspection PyUnresolvedReferences
 import envs.atc.atc_gym
@@ -18,7 +20,19 @@ import envs.atc.atc_gym
 
 def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: bool = True):
     def callback(locals_, globals_):
-        pass
+        self_ = locals_["self"]
+
+        mean_actions = np.mean(self_.env.get_attr("actions_per_timestep"))
+        mean_actions_tf = tf.Summary(value=[tf.Summary.Value(tag='simulation/mean_actions', simple_value=mean_actions)])
+        winning_ratio = np.mean(self_.env.get_attr("winning_ratio"))
+        winning_ratio_tf = tf.Summary(value=[tf.Summary.Value(tag='simulation/winning_ratio', simple_value=winning_ratio)])
+        fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
+
+        locals_['writer'].add_summary(fps, self_.num_timesteps)
+        locals_['writer'].add_summary(mean_actions_tf, self_.num_timesteps)
+        locals_['writer'].add_summary(winning_ratio_tf, self_.num_timesteps)
+
+        return True
 
     def video_trigger(step):
         # allow warm-up for video recording
@@ -46,7 +60,7 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
         env = Monitor(env, log_dir_single, allow_early_resets=True)
         return env
 
-    n_envs = 24
+    n_envs = 8
     if multiprocess:
         env = SubprocVecEnv([lambda: make_env() for i in range(n_envs)])
     else:
@@ -58,11 +72,11 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     hyperparams = {"n_steps": 1024,
                    "nminibatches": 32,
                    "cliprange": 0.3,
-                   "gamma": 0.995,
+                   "gamma": 0.999,
                    "lam": 0.95,
                    "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.0001, final_p=0.001).value(step),
-                   "noptepochs": 20,
-                   "ent_coef": 0.007}
+                   "noptepochs": 4,
+                   "ent_coef": 0.01}
 
     yaml.dump(hyperparams, open(os.path.join(model_dir, "hyperparams.yml"), "w+"))
 
@@ -81,4 +95,4 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(24e6), multiprocess=True, record_video=False)
+    learn(time_steps=int(1e6), multiprocess=True, record_video=False)

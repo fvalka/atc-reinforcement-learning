@@ -69,10 +69,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
     if verbose > 0:
         print("Sampler: {} - Pruner: {}".format(sampler_method, pruner_method))
 
-    study = optuna.load_study(study_name="distributed-atc-gym-3",
-                              storage="sqlite:///c:/Users/Fabian Valka/Documents/privat/prj/atc-reinforcement-learning/optuna/gym3.db",
-                              sampler=sampler, pruner=pruner)
-    #study = optuna.create_study(sampler=sampler, pruner=pruner)
+    study = optuna.create_study(sampler=sampler, pruner=pruner)
     algo_sampler = HYPERPARAMS_SAMPLER[algo]
 
     def objective(trial):

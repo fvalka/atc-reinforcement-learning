@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 import shapely.geometry as geom
 import shapely.ops
+from numba import jit
 
 nautical_miles_to_feet = 6076  # ft/nm
 
@@ -164,6 +165,7 @@ class Corridor:
         self.h = h
         self.phi_from_runway = phi_from_runway
         self.phi_to_runway = (phi_from_runway + 180) % 360
+        self._faf_iaf_normal = np.dot(rot_matrix(self.phi_from_runway), np.array([[0], [1]]))
 
         faf_threshold_distance = 7.4
         faf_angle = 45
@@ -182,17 +184,33 @@ class Corridor:
         self.corridor1 = geom.Polygon([self.faf, self.corner1, self.iaf])
         self.corridor2 = geom.Polygon([self.faf, self.corner2, self.iaf])
 
+        self.corridor_horizontal_list = np.array(list(self.corridor_horizontal.exterior.coords))
+        self.corridor1_list = np.array(list(self.corridor1.exterior.coords))
+        self.corridor2_list = np.array(list(self.corridor2.exterior.coords))
+
     def inside_corridor(self, x, y, h, phi):
-        faf_iaf_normal = np.dot(rot_matrix(self.phi_from_runway), np.array([[0], [1]]))
+        """
+        Performance optimized inside corridor check.
+
+        :param x: x-position of the airplane [nm]
+        :param y: y-position of the airplane [nm]
+        :param h: Altitude of the airplane [ft]
+        :param phi: Heading [deg]
+        :return: Whether the airplane is inside the approach corridor
+        """
+        if not ray_tracing(x, y, self.corridor_horizontal_list):
+            return False
+
         p = np.array([[x, y]])
-        t = np.dot(p - np.transpose(self.faf), faf_iaf_normal)
-        projection_on_faf_iaf = self.faf + t * faf_iaf_normal
+        t = np.dot(p - np.transpose(self.faf), self._faf_iaf_normal)
+        projection_on_faf_iaf = self.faf + t * self._faf_iaf_normal
         h_max_on_projection = np.linalg.norm(projection_on_faf_iaf - np.array([[self.x], [self.y]])) * \
                               math.tan(3 * math.pi / 180) * nautical_miles_to_feet + self.h
 
-        direction_correct = self._inside_corridor_angle(x, y, phi)
+        if not h <= h_max_on_projection:
+            return False
 
-        return self.corridor_horizontal.intersects(geom.Point(x, y)) and h <= h_max_on_projection and direction_correct
+        return self._inside_corridor_angle(x, y, phi)
 
     def _inside_corridor_angle(self, x, y, phi):
 
@@ -206,10 +224,10 @@ class Corridor:
             )
         )[0][0]
         min_angle = self.faf_angle - beta
-        if self.corridor1.intersects(geom.Point(x, y)) and min_angle <= relative_angle(to_runway,
+        if ray_tracing(x, y, self.corridor1_list) and min_angle <= relative_angle(to_runway,
                                                                                        phi) <= self.faf_angle:
             direction_correct = True
-        elif self.corridor2.intersects(geom.Point(x, y)) and min_angle <= relative_angle(phi,
+        elif ray_tracing(x, y, self.corridor2_list) and min_angle <= relative_angle(phi,
                                                                                          to_runway) <= self.faf_angle:
             direction_correct = True
 
@@ -243,12 +261,13 @@ class Runway:
 
 
 class MinimumVectoringAltitude:
-    area: geom.polygon
+    area: geom.Polygon
     height: int
 
-    def __init__(self, area: geom.polygon, height: int):
+    def __init__(self, area: geom.Polygon, height: int):
         self.area = area
         self.height = height
+        self.area_as_list = np.array(list(area.exterior.coords))
 
 
 class Airspace:
@@ -264,7 +283,7 @@ class Airspace:
 
     def find_mva(self, x, y):
         for mva in self.mvas:
-            if mva.area.contains(geom.Point(x, y)):
+            if ray_tracing(x, y, mva.area_as_list):
                 return mva
         raise ValueError('Outside of airspace')
 
@@ -285,7 +304,28 @@ class Airspace:
         combined_poly = shapely.ops.unary_union(polys)
         return combined_poly
 
+@jit(nopython=True)
+def ray_tracing(x,y,poly):
+    n = len(poly)
+    inside = False
+    p2x = 0.0
+    p2y = 0.0
+    xints = 0.0
+    p1x,p1y = poly[0]
+    for i in range(n+1):
+        p2x,p2y = poly[i % n]
+        if y > min(p1y,p2y):
+            if y <= max(p1y,p2y):
+                if x <= max(p1x,p2x):
+                    if p1y != p2y:
+                        xints = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                    if p1x == p2x or x <= xints:
+                        inside = not inside
+        p1x,p1y = p2x,p2y
 
+    return inside
+
+@jit(nopython=True)
 def relative_angle(angle1, angle2):
     return (angle2 - angle1 + 180) % 360 - 180
 
