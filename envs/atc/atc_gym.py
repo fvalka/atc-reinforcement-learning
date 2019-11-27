@@ -164,7 +164,7 @@ class AtcGym(gym.Env):
             self.actions_per_timestep = self._actions_ignoring_resets / self._timesteps_ignoring_resets
 
     @staticmethod
-    #@jit(nopython=True)
+    @jit(nopython=True)
     def _reward_approach_position(d_faf: float, phi_to_runway: float, phi_rel_to_faf: float, faf_power: float = 0.2):
         """
         Provides a reward based upon the position of the aircraft in relation to the final approach course
@@ -203,7 +203,7 @@ class AtcGym(gym.Env):
         return altitude_diff_factor * position_factor * 1.2
 
     @staticmethod
-    #@jit(nopython=True)
+    @jit(nopython=True)
     def _reward_approach_angle(d_faf, phi_to_runway, phi_rel_to_faf, phi_plane, position_factor):
         """
         Provides a reward based upon the angle of the aircraft relative to an intercept of the approach course.
@@ -265,7 +265,8 @@ class AtcGym(gym.Env):
         """
         self.done = False
         self._airplane = model.Airplane(self._sim_parameters, "FLT01", 10, 51, 16000, 90, 250)
-        self._airplane = model.Airplane(self._sim_parameters, "FLT01", 47.3, 34.5, 16000, 90, 250)
+        # only for testing/debuging, position next to FAF:
+        # self._airplane = model.Airplane(self._sim_parameters, "FLT01", 47.3, 34.5, 16000, 335, 250)
         self.state = self._get_state(0)
         self.total_reward = 0
         self.last_reward = 0
