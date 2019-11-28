@@ -14,10 +14,12 @@ t0 = time.time()
 for i in range(num):
     state, reward, done, info = env.step(nextaction)
     env.render()
-    #time.sleep(1)
+    time.sleep(1)
     if i % 20 == 0:
         nextaction = env.action_space.sample()
     print("reward: %s || done: %s" % (state, done))
+    if done:
+        env.reset()
 t1 = time.time()
 
 print("Finished!")

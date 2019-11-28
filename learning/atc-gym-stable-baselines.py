@@ -6,9 +6,10 @@ from multiprocessing import freeze_support
 import gym
 import yaml
 from gym.wrappers import TimeLimit
-from stable_baselines import PPO2
+from stable_baselines import PPO2, SAC
 from stable_baselines.bench import Monitor
 from stable_baselines.common.policies import MlpPolicy
+import stable_baselines.sac.policies as sacpolicies
 from stable_baselines.common.schedules import LinearSchedule
 from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
 import tensorflow as tf
@@ -18,7 +19,15 @@ import numpy as np
 import envs.atc.atc_gym
 
 
-def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: bool = True):
+class ModelFactory:
+    hyperparams: dict
+
+    def build(self, env, log_dir):
+        pass
+
+
+def learn(model_factory: ModelFactory, multiprocess: bool = True, time_steps: int = int(1e6),
+          record_video: bool = True):
     def callback(locals_, globals_):
         self_ = locals_["self"]
 
@@ -27,12 +36,12 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
         winning_ratio = np.mean(self_.env.get_attr("winning_ratio"))
         winning_ratio_tf = tf.Summary(
             value=[tf.Summary.Value(tag='simulation/winning_ratio', simple_value=winning_ratio)])
-        fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
-
-        locals_['writer'].add_summary(fps, self_.num_timesteps)
         locals_['writer'].add_summary(mean_actions_tf, self_.num_timesteps)
         locals_['writer'].add_summary(winning_ratio_tf, self_.num_timesteps)
 
+        if isinstance(model_factory, PPO2ModelFactory):
+            fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
+            locals_['writer'].add_summary(fps, self_.num_timesteps)
         return True
 
     def video_trigger(step):
@@ -70,18 +79,10 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     if record_video:
         env = VecVideoRecorder(env, video_dir, video_trigger, video_length=2000)
 
-    hyperparams = {"n_steps": 2048,
-                   "nminibatches": 32,
-                   "cliprange": 0.3,
-                   "gamma": 0.995,
-                   "lam": 0.95,
-                   "learning_rate": lambda step: LinearSchedule(1.0, initial_p=0.00025, final_p=0.0025).value(step),
-                   "noptepochs": 4,
-                   "ent_coef": 0.01}
+    model = model_factory.build(env, log_dir_tensorboard)
 
-    yaml.dump(hyperparams, open(os.path.join(model_dir, "hyperparams.yml"), "w+"))
+    yaml.dump(model_factory.hyperparams, open(os.path.join(model_dir, "hyperparams.yml"), "w+"))
 
-    model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir_tensorboard, **hyperparams)
     # model = ACKTR(MlpPolicy, env, verbose=1)
     model.learn(total_timesteps=time_steps, callback=callback)
 
@@ -102,6 +103,41 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
             obs = new_env.reset()
 
 
+class PPO2ModelFactory(ModelFactory):
+
+    def __init__(self):
+        self.hyperparams = {"n_steps": 1024,
+                            "nminibatches": 32,
+                            "cliprange": 0.4,
+                            "gamma": 0.993,
+                            "lam": 0.95,
+                            "learning_rate": LinearSchedule(1.0, initial_p=0.002, final_p=0.005).value,
+                            "noptepochs": 8,
+                            "ent_coef": 0.005}
+
+    def build(self, env, log_dir):
+        return PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir, **self.hyperparams)
+
+
+class SACModelFactory(ModelFactory):
+
+    def __init__(self):
+        self.hyperparams = {
+            "learning_rate": 3e-4,
+            "buffer_size": 1000000,
+            "batch_size": 256,
+            "ent_coef": "auto",
+            "gamma": 0.99,
+            "train_freq": 1,
+            "tau": 0.005,
+            "gradient_steps": 1,
+            "learning_starts": 1000
+        }
+
+    def build(self, env, log_dir):
+        return SAC(sacpolicies.MlpPolicy, env, verbose=1, tensorboard_log=log_dir, **self.hyperparams)
+
+
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(5e6), multiprocess=True, record_video=False)
+    learn(SACModelFactory(), time_steps=int(2e6), multiprocess=False, record_video=False)

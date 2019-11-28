@@ -42,8 +42,8 @@ class Airplane:
         self.h_max = h_max
         self.v_min = v_min
         self.v_max = v_max
-        self.h_dot_min = -1000
-        self.h_dot_max = 1000
+        self.h_dot_min = -41
+        self.h_dot_max = 15
         self.a_max = 5
         self.a_min = -5
         self.phi_dot_max = 3
