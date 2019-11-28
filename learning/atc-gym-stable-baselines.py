@@ -25,7 +25,8 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
         mean_actions = np.mean(self_.env.get_attr("actions_per_timestep"))
         mean_actions_tf = tf.Summary(value=[tf.Summary.Value(tag='simulation/mean_actions', simple_value=mean_actions)])
         winning_ratio = np.mean(self_.env.get_attr("winning_ratio"))
-        winning_ratio_tf = tf.Summary(value=[tf.Summary.Value(tag='simulation/winning_ratio', simple_value=winning_ratio)])
+        winning_ratio_tf = tf.Summary(
+            value=[tf.Summary.Value(tag='simulation/winning_ratio', simple_value=winning_ratio)])
         fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
 
         locals_['writer'].add_summary(fps, self_.num_timesteps)
@@ -36,10 +37,10 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
     def video_trigger(step):
         # allow warm-up for video recording
-        if not record_video or step < time_steps/3:
+        if not record_video or step < time_steps / 3:
             return False
 
-        return step % (int(time_steps/8)) == 0
+        return step % (int(time_steps / 8)) == 0
 
     log_dir = "../logs/%s/" % datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
 
@@ -55,7 +56,7 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
     def make_env():
         log_dir_single = "%s/%s/" % (log_dir, uuid.uuid4())
         env = gym.make('AtcEnv-v0')
-        env = TimeLimit(env, 8000)
+        env = TimeLimit(env, 4000)
         os.makedirs(log_dir_single, exist_ok=True)
         env = Monitor(env, log_dir_single, allow_early_resets=True)
         return env
@@ -86,12 +87,16 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
     model.save("%s/PPO2_atc_gym" % model_dir)
 
+    # render trained model actions on screen and to file
+    eval_observations_file = open(os.path.join(model_dir, "evaluation.csv"), 'a+')
     new_env = gym.make('AtcEnv-v0')
-
     obs = new_env.reset()
     while True:
         action, _states = model.predict(obs)
         obs, rewards, done, info = new_env.step(action)
+        original_state = info["original_state"]
+        eval_observations_file.write("%.2f, %.2f, %.0f, %.1f\n" %
+                                     (original_state[0], original_state[1], original_state[2], original_state[3]))
         new_env.render()
         if done:
             obs = new_env.reset()
@@ -99,4 +104,4 @@ def learn(multiprocess: bool = True, time_steps: int = int(1e6), record_video: b
 
 if __name__ == '__main__':
     freeze_support()
-    learn(time_steps=int(1e5), multiprocess=True, record_video=False)
+    learn(time_steps=int(5e6), multiprocess=True, record_video=False)

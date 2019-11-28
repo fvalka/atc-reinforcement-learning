@@ -138,20 +138,20 @@ class AtcGym(gym.Env):
 
             if self._airplane.h < mva:
                 # Airplane has descended below the minimum vectoring altitude
-                reward = -200
+                reward = -1000
                 self.done = True
             # else:
             # reward += (self._airplane.h - mva)/40000 * 0.0004
         except ValueError:
             # Airplane has left the airspace
             self.done = True
-            reward = -50
+            reward = -500
             mva = 0  # dummy value outside of range so that the MVA is set for the last state
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
             self._won_simulations_ignoring_resets += 1
-            reward = 8000
+            reward = 20000
             self.done = True
 
         state = self._get_state(mva)
@@ -173,7 +173,7 @@ class AtcGym(gym.Env):
                     / (0.5 * self.normalization_state_max)
 
         self._update_metrics(reward)
-        return state, reward, self.done, {}
+        return state, reward, self.done, {"original_state": self.state}
 
     def _update_metrics(self, reward):
         self.last_reward = reward
@@ -203,7 +203,7 @@ class AtcGym(gym.Env):
         #         return reward_faf * reward_app_angle * 0.8
         reward_faf = 1.0 / max(d_faf ** faf_power, 1.0)
         reward_app_angle = (abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0) ** 1.5
-        return reward_faf * reward_app_angle * 0.8
+        return reward_faf * reward_app_angle * 0.6
 
     @staticmethod
     @jit(nopython=True)
@@ -221,7 +221,7 @@ class AtcGym(gym.Env):
         # base calculation, glideslope of 3 deg np.tan(np.radians(3)) * model.nautical_miles_to_feet
         on_gp_altitude = 318.4 * d_faf + faf_altitude
         altitude_diff_factor = 1 - abs(h - on_gp_altitude) / 40000.0
-        return altitude_diff_factor * position_factor * 1.2
+        return altitude_diff_factor * position_factor * 1.0
 
     @staticmethod
     @jit(nopython=True)
@@ -237,14 +237,13 @@ class AtcGym(gym.Env):
         :param phi_plane: Heading of the plane
         :return: Reward factor
         """
-
         def reward_model(angle):
             return (-((angle - 22.5) / 202.0) ** 2.0 + 1.0) ** 32.0
 
         plane_to_runway = model.relative_angle(phi_to_runway, phi_plane)
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
 
-        return reward_model(side * plane_to_runway) * position_factor * 0.8
+        return reward_model(side * plane_to_runway) * position_factor * 0.6
 
     def _get_state(self, mva):
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
@@ -262,10 +261,10 @@ class AtcGym(gym.Env):
         action_to_take = self._denormalized_action(action[index], index)
         try:
             func(action_to_take)
-            if not action_to_take - self.last_action[index] < self._sim_parameters.precision:
+            if not abs(action_to_take - self.last_action[index]) < self._sim_parameters.precision:
                 self.actions_taken += 1
                 self._actions_ignoring_resets += 1
-                return -0.005
+                return -0.008
                 # return 0.0
             self.last_action[index] = action_to_take
         except ValueError:

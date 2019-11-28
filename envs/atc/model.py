@@ -79,8 +79,6 @@ class Airplane:
 
         self.v = self.v + delta_v
 
-        return abs(delta_v) >= self.sim_parameters.precision
-
     def action_h(self, action_h):
         """
         Updates the aircrafts state to a new target height.
@@ -103,8 +101,6 @@ class Airplane:
 
         self.h = self.h + delta_h
 
-        return abs(delta_h) >= self.sim_parameters.precision
-
     def action_phi(self, action_phi):
         """
         Updates the aircrafts state to a new course.
@@ -123,8 +119,6 @@ class Airplane:
 
         self.phi = self.phi + delta_phi
 
-        return abs(delta_phi) >= self.sim_parameters.precision
-
     def step(self):
         self.position_history.append((self.x, self.y))
 
@@ -136,7 +130,7 @@ class Airplane:
 
 
 class SimParameters:
-    def __init__(self, timestep: float, precision: float = 0.0001, reward_shaping: bool = True,
+    def __init__(self, timestep: float, precision: float = 0.5, reward_shaping: bool = True,
                  normalize_state: bool = True, discrete_action_space: bool = False):
         """
         Defines the simulation parameters
