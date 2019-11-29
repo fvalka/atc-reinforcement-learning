@@ -111,9 +111,9 @@ class PPO2ModelFactory(ModelFactory):
                             "cliprange": 0.4,
                             "gamma": 0.993,
                             "lam": 0.95,
-                            "learning_rate": LinearSchedule(1.0, initial_p=0.002, final_p=0.005).value,
-                            "noptepochs": 8,
-                            "ent_coef": 0.005}
+                            "learning_rate": LinearSchedule(1.0, initial_p=0.0002, final_p=0.001).value,
+                            "noptepochs": 4,
+                            "ent_coef": 0.007}
 
     def build(self, env, log_dir):
         return PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir, **self.hyperparams)
@@ -140,4 +140,4 @@ class SACModelFactory(ModelFactory):
 
 if __name__ == '__main__':
     freeze_support()
-    learn(PPO2ModelFactory(), time_steps=int(2e6), multiprocess=False, record_video=False)
+    learn(PPO2ModelFactory(), time_steps=int(24e6), multiprocess=True, record_video=False)
