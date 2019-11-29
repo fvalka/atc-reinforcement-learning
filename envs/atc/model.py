@@ -304,7 +304,7 @@ class Airspace:
         polys: List[geom.polygon] = [mva.area for mva in self.mvas]
         combined_poly = shapely.ops.unary_union(polys)
         return combined_poly
-    
+
 
 class EntryPoint:
 
@@ -342,6 +342,7 @@ def relative_angle(angle1, angle2):
     return (angle2 - angle1 + 180) % 360 - 180
 
 
+@jit(nopython=True)
 def rot_matrix(phi):
     phi = math.radians(phi)
     return np.array([[math.cos(phi), math.sin(phi)], [-math.sin(phi), math.cos(phi)]])

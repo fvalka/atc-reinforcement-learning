@@ -24,12 +24,14 @@ class AtcGym(gym.Env):
         self.total_reward = 0
         self.actions_taken = 0
 
-        self._timesteps_ignoring_resets = 0
         self._episodes_run = 0
         self._actions_ignoring_resets = 0
         self._won_simulations_ignoring_resets = 0
+        self._win_buffer_size = 10
+        self._win_buffer = [0] * self._win_buffer_size
         self.actions_per_timestep = 0
         self.timesteps = 0
+        self.timestep_limit = 4000
         self.winning_ratio = 0
 
         self._sim_parameters = sim_parameters
@@ -47,7 +49,7 @@ class AtcGym(gym.Env):
         self._world_y_max = bbox[3]
         world_x_length = self._world_x_max - self._world_x_min
         world_y_length = self._world_y_max - self._world_y_min
-        world_max_distance = np.hypot(world_x_length, world_y_length)
+        self._world_max_distance = self.euclidean_dist(world_x_length, world_y_length)
 
         self.done = True
         self.reset()
@@ -94,7 +96,7 @@ class AtcGym(gym.Env):
             360,  # airplane heading, phi in degrees
             self._airplane.v_max - self._airplane.v_min,  # airplane speed, v in knots
             self._airplane.h_max,  # height above the current mva in feet
-            world_max_distance,  # distance to FAF in nautical miles
+            self._world_max_distance,  # distance to FAF in nautical miles
             360,  # phi relative to the FAF in degrees (-180, 180)
             360  # phi relative to the runway in degrees (-180, 180)
         ])
@@ -103,7 +105,7 @@ class AtcGym(gym.Env):
         self.observation_space = gym.spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1, -1, -1, -1]),
                                                 high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]))
 
-        self.reward_range = (-3000.0, 2500.0)
+        self.reward_range = (-3000.0, 18000.0)
 
     def seed(self, seed=None):
         """
@@ -123,12 +125,9 @@ class AtcGym(gym.Env):
         :param action: Action in format: v, h, phi
         :return: Reward obtained from this step
         """
-        self._timesteps_ignoring_resets += 1
         self.timesteps += 1
         self.done = False
-        reward = -0.1 * self._sim_parameters.timestep
-
-        assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
+        reward = -0.05 * self._sim_parameters.timestep
 
         reward += self._action_with_reward(self._airplane.action_v, action, 0)
         reward += self._action_with_reward(self._airplane.action_h, action, 1)
@@ -142,20 +141,22 @@ class AtcGym(gym.Env):
 
             if self._airplane.h < mva:
                 # Airplane has descended below the minimum vectoring altitude
-                reward = -2000
+                self._win_buffer.append(0)
+                reward = -200
                 self.done = True
             # else:
             # reward += (self._airplane.h - mva)/40000 * 0.0004
         except ValueError:
             # Airplane has left the airspace
+            self._win_buffer.append(0)
             self.done = True
-            reward = -1000
+            reward = -50
             mva = 0  # dummy value outside of range so that the MVA is set for the last state
 
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
-            self._won_simulations_ignoring_resets += 1
-            reward = 2000
+            self._win_buffer.append(1)
+            reward = 10000
             self.done = True
 
         state = self._get_state(mva)
@@ -164,9 +165,9 @@ class AtcGym(gym.Env):
         # Reward shaping rewards for approach sector position and glideslope
         if self._sim_parameters.reward_shaping:
             app_position_reward = self._reward_approach_position(self._d_faf, self._runway.phi_to_runway,
-                                                                 self._phi_rel_faf)
+                                                                 self._phi_rel_faf, self._world_max_distance)
             reward += app_position_reward
-            reward += self._reward_approach_angle(self._d_faf, self._runway.phi_to_runway,
+            reward += self._reward_approach_angle(self._runway.phi_to_runway,
                                                   self._phi_rel_faf, self._airplane.phi, app_position_reward)
             reward += self._reward_glideslope(self._d_faf, self._airplane.h,
                                               self._runway.phi_to_runway, self._phi_rel_faf,
@@ -186,7 +187,8 @@ class AtcGym(gym.Env):
 
     @staticmethod
     @jit(nopython=True)
-    def _reward_approach_position(d_faf: float, phi_to_runway: float, phi_rel_to_faf: float, faf_power: float = 0.2):
+    def _reward_approach_position(d_faf: float, phi_to_runway: float, phi_rel_to_faf: float,
+                                  world_max_dist: float, faf_power: float = 0.4):
         """
         Provides a reward based upon the position of the aircraft in relation to the final approach course
 
@@ -204,9 +206,9 @@ class AtcGym(gym.Env):
         # reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
         #         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
         #         return reward_faf * reward_app_angle * 0.8
-        reward_faf = 1.0 / max(d_faf ** faf_power, 1.0)
+        reward_faf = 1.0 - (d_faf/world_max_dist)**faf_power
         reward_app_angle = (abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0) ** 1.5
-        return reward_faf * reward_app_angle * 0.04
+        return reward_faf * reward_app_angle * 0.8
 
     @staticmethod
     @jit(nopython=True)
@@ -223,58 +225,77 @@ class AtcGym(gym.Env):
         """
         # base calculation, glideslope of 3 deg np.tan(np.radians(3)) * model.nautical_miles_to_feet
         on_gp_altitude = 318.4 * d_faf + faf_altitude
-        altitude_diff_factor = 1 - abs(h - on_gp_altitude) / 40000.0
-        return altitude_diff_factor * position_factor * 0.12
+        altitude_diff_factor = 1 - (abs(h - on_gp_altitude) / 40000.0) ** 0.4
+        return altitude_diff_factor * position_factor * 1.2
 
     @staticmethod
     @jit(nopython=True)
-    def _reward_approach_angle(d_faf, phi_to_runway, phi_rel_to_faf, phi_plane, position_factor):
+    def _reward_approach_angle(phi_to_runway, phi_rel_to_faf, phi_plane, position_factor):
         """
         Provides a reward based upon the angle of the aircraft relative to an intercept of the approach course.
 
         Weighted by the distance to the FAF.
 
-        :param d_faf: Distance to the faf, in nm
         :param phi_to_runway: Approach course/Runway heading
         :param phi_rel_to_faf: Angle of the airplane to the FAF
         :param phi_plane: Heading of the plane
+        :param position_factor: Weighting factor, which is based upon the position in the world
         :return: Reward factor
         """
+
         def reward_model(angle):
             return (-((angle - 22.5) / 202.0) ** 2.0 + 1.0) ** 32.0
 
         plane_to_runway = model.relative_angle(phi_to_runway, phi_plane)
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
 
-        return reward_model(side * plane_to_runway) * position_factor * 0.04
+        return reward_model(side * plane_to_runway) * position_factor * 0.8
 
     def _get_state(self, mva):
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
         to_faf_x = self._runway.corridor.faf[0][0] - self._airplane.x
         to_faf_y = self._runway.corridor.faf[1][0] - self._airplane.y
-        phi_rel_runway = model.relative_angle(self._runway.phi_to_runway, self._airplane.phi)
-        self._d_faf = np.hypot(to_faf_x, to_faf_y)
-        self._phi_rel_faf = np.degrees(np.arctan2(to_faf_y, to_faf_x))
+        phi_rel_runway = self._calculate_phi_rel_runway(self._runway.phi_to_runway, self._airplane.phi)
+        self._d_faf = self.euclidean_dist(to_faf_x, to_faf_y)
+        self._phi_rel_faf = self._calculate_phi_rel_faf(to_faf_x, to_faf_y)
         state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
                           self._airplane.v, self._airplane.h - mva, self._d_faf, self._phi_rel_faf, phi_rel_runway],
                          dtype=np.float32)
         return state
 
+    @staticmethod
+    @jit(nopython=True)
+    def _calculate_phi_rel_runway(phi_to_runway, airplane_phi):
+        return model.relative_angle(phi_to_runway, airplane_phi)
+
+    @staticmethod
+    @jit(nopython=True)
+    def _calculate_phi_rel_faf(to_faf_x, to_faf_y):
+        return np.degrees(np.arctan2(to_faf_y, to_faf_x))
+
+    @staticmethod
+    @jit(nopython=True)
+    def euclidean_dist(to_faf_x, to_faf_y):
+        return np.hypot(to_faf_x, to_faf_y)
+
     def _action_with_reward(self, func, action, index):
         action_to_take = self._denormalized_action(action[index], index)
+        reward = 0.0
+
         try:
             func(action_to_take)
             if not abs(action_to_take - self.last_action[index]) < self._action_discriminator[index]:
                 self.actions_taken += 1
-                self._actions_ignoring_resets += 1
-                return -0.0008
-                # return 0.0
+                # give negative reward for telling the airplane to climb again
+                if index == 1:
+                    if action_to_take > self.last_action[1]:
+                        reward -= 0.5
             self.last_action[index] = action_to_take
         except ValueError:
             # invalid action, outside of permissible range
             print("Warning invalid action: %d for index: %d" % (action_to_take, index))
-            return -1.0
-        return 0.0
+            reward -= 1.0
+        return reward
 
     def _denormalized_action(self, action, index):
         return self._denormalized_action_optimized(action, index, self._sim_parameters.discrete_action_space,
@@ -312,10 +333,17 @@ class AtcGym(gym.Env):
         self.state = self._get_state(0)
         self.total_reward = 0
         self.last_reward = 0
+        self._actions_ignoring_resets += self.actions_taken
         self.actions_taken = 0
         self.timesteps = 0
         self._episodes_run += 1
-        self.winning_ratio = self._won_simulations_ignoring_resets / self._episodes_run
+
+        if len(self._win_buffer) < self._win_buffer_size:
+            # simulation has been ended by time limit or such, from the outside
+            self._win_buffer.append(0)
+        self.winning_ratio = self.winning_ratio + 1 / self._win_buffer_size * \
+                             (self._win_buffer[-1] - self._win_buffer.pop(0))
+
         return self.state
 
     def render(self, mode='human'):

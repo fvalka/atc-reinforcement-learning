@@ -13,7 +13,7 @@ class Scenario:
 
 class SimpleScenario(Scenario):
 
-    def __init__(self):
+    def __init__(self, random_entrypoints=False):
         mva_1 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 0), (35, 26)]), 3500)
         mva_2 = model.MinimumVectoringAltitude(shape.Polygon([(15, 0), (35, 26), (35, 30), (15, 30), (15, 27.8)]), 2400)
         mva_3 = model.MinimumVectoringAltitude(shape.Polygon([(15, 30), (35, 30), (35, 40), (15, 40)]), 4000)
@@ -27,10 +27,13 @@ class SimpleScenario(Scenario):
         phi = 130
         self.runway = model.Runway(x, y, h, phi)
         self.airspace = model.Airspace(self.mvas, self.runway)
+        self.entrypoints = [
+            model.EntryPoint(5, 35, 90, [150])
+        ]
 
 
 class LOWW(Scenario):
-    def __init__(self):
+    def __init__(self, random_entrypoints=False):
         super().__init__()
 
         self.mvas = [
@@ -186,14 +189,19 @@ class LOWW(Scenario):
 
         self.airspace = model.Airspace(self.mvas, self.runway)
 
-        self.entrypoints = [
-            model.EntryPoint(10, 51, 90, [130, 150, 170, 190, 210, 230]),
-            model.EntryPoint(17, 74.6, 120, [130, 150, 170, 190, 210, 230]),
-            model.EntryPoint(19.0, 34.0, 45, [130, 150, 170, 190, 210, 230]),
-            model.EntryPoint(29.8, 79.4, 170, [130, 150, 170, 190, 210, 230]),
-            model.EntryPoint(54.0, 80.5, 230, [140, 160, 180, 200, 220, 240]),
-            model.EntryPoint(53.0, 60.0, 260, [140, 160, 180, 200, 220, 240]),
-            model.EntryPoint(66.0, 39.0, 290, [140, 160, 180, 200, 220]),
-            model.EntryPoint(64.4, 22.0, 320, [140, 160, 180, 200, 220]),
-            model.EntryPoint(46.0, 7.0, 320, [140, 160, 180, 200, 220, 240, 260])
-        ]
+        if random_entrypoints:
+            self.entrypoints = [
+                model.EntryPoint(10, 51, 90, [130, 150, 170, 190, 210, 230]),
+                model.EntryPoint(17, 74.6, 120, [130, 150, 170, 190, 210, 230]),
+                model.EntryPoint(19.0, 34.0, 45, [130, 150, 170, 190, 210, 230]),
+                model.EntryPoint(29.8, 79.4, 170, [130, 150, 170, 190, 210, 230]),
+                model.EntryPoint(54.0, 80.5, 230, [140, 160, 180, 200, 220, 240]),
+                model.EntryPoint(53.0, 60.0, 260, [140, 160, 180, 200, 220, 240]),
+                model.EntryPoint(66.0, 39.0, 290, [140, 160, 180, 200, 220]),
+                model.EntryPoint(64.4, 22.0, 320, [140, 160, 180, 200, 220]),
+                model.EntryPoint(46.0, 7.0, 320, [140, 160, 180, 200, 220, 240, 260])
+            ]
+        else:
+            self.entrypoints = [
+                model.EntryPoint(10, 51, 90, [150])
+            ]
