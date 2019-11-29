@@ -140,4 +140,4 @@ class SACModelFactory(ModelFactory):
 
 if __name__ == '__main__':
     freeze_support()
-    learn(SACModelFactory(), time_steps=int(2e6), multiprocess=False, record_video=False)
+    learn(PPO2ModelFactory(), time_steps=int(2e6), multiprocess=False, record_video=False)
