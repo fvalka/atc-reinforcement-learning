@@ -105,7 +105,7 @@ class AtcGym(gym.Env):
         self.observation_space = gym.spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1, -1, -1, -1]),
                                                 high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]))
 
-        self.reward_range = (-3000.0, 18000.0)
+        self.reward_range = (-3000.0, 23000.0)
 
     def seed(self, seed=None):
         """
@@ -156,7 +156,9 @@ class AtcGym(gym.Env):
         if self._runway.inside_corridor(self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi):
             # GAME WON!
             self._win_buffer.append(1)
-            reward = 10000
+            # Ensure that the wining reward is larger than the reward obtainable from still moving through the
+            # environment by making this factor > sum(all other obtainable rewards per timestep)
+            reward = 10000 + max((self.timestep_limit - self.timesteps) * 5, 0)
             self.done = True
 
         state = self._get_state(mva)
@@ -283,13 +285,18 @@ class AtcGym(gym.Env):
         reward = 0.0
 
         try:
-            func(action_to_take)
             if not abs(action_to_take - self.last_action[index]) < self._action_discriminator[index]:
+                func(action_to_take)
                 self.actions_taken += 1
                 # give negative reward for telling the airplane to climb again
                 if index == 1:
                     if action_to_take > self.last_action[1]:
-                        reward -= 0.5
+                        reward -= 2.5
+            else:
+                # avoid that the agent cheats by performing very small actions, below the discriminator
+                func(self.last_action[index])
+                # positive reward for not taking a new action
+                reward += 0.3
             self.last_action[index] = action_to_take
         except ValueError:
             # invalid action, outside of permissible range
