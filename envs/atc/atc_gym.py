@@ -296,7 +296,7 @@ class AtcGym(gym.Env):
                 # avoid that the agent cheats by performing very small actions, below the discriminator
                 func(self.last_action[index])
                 # positive reward for not taking a new action
-                reward += 0.3
+                reward += 0.001
             self.last_action[index] = action_to_take
         except ValueError:
             # invalid action, outside of permissible range

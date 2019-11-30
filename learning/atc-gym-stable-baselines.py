@@ -41,7 +41,11 @@ def learn(model_factory: ModelFactory, multiprocess: bool = True, time_steps: in
 
         if isinstance(model_factory, PPO2ModelFactory):
             fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
+            mean_length = np.mean([info["l"] for info in locals_["ep_infos"]])
+            mean_length_tf = tf.Summary(
+                value=[tf.Summary.Value(tag='simulation/mean_episode_length', simple_value=mean_length)])
             locals_['writer'].add_summary(fps, self_.num_timesteps)
+            locals_['writer'].add_summary(mean_length_tf, self_.num_timesteps)
         return True
 
     def video_trigger(step):
