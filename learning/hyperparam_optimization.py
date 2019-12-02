@@ -204,12 +204,12 @@ def sample_ppo2_params(trial):
     :return: (dict)
     """
     batch_size = trial.suggest_categorical('batch_size', [32, 64, 128, 256])
-    n_steps = trial.suggest_categorical('n_steps', [16, 32, 64, 128, 256, 512, 1024, 2048, 4096])
+    n_steps = trial.suggest_categorical('n_steps', [512, 1024, 2048, 4096])
     gamma = trial.suggest_categorical('gamma', [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
     learning_rate = trial.suggest_loguniform('lr', 1e-5, 1)
     ent_coef = trial.suggest_loguniform('ent_coef', 0.00000001, 0.1)
     cliprange = trial.suggest_categorical('cliprange', [0.1, 0.2, 0.3, 0.4])
-    noptepochs = trial.suggest_categorical('noptepochs', [1, 5, 10, 20, 30, 50])
+    noptepochs = trial.suggest_categorical('noptepochs', [1, 4, 8, 10, 20, 30, 50])
     lam = trial.suggest_categorical('lamdba', [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
 
     if n_steps < batch_size:

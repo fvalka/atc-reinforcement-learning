@@ -1,3 +1,4 @@
+import math
 import random
 
 import gym
@@ -11,6 +12,11 @@ from envs.atc.rendering import Label
 from envs.atc.themes import ColorScheme
 from . import model
 from . import scenarios
+
+
+@jit(nopython=True)
+def sigmoid_distance_func(d, d_max):
+    return (1.0 - math.tanh(4.0 * (d / d_max) - 2.0)) / 2.0
 
 
 class AtcGym(gym.Env):
@@ -31,7 +37,7 @@ class AtcGym(gym.Env):
         self._win_buffer = [0] * self._win_buffer_size
         self.actions_per_timestep = 0
         self.timesteps = 0
-        self.timestep_limit = 4000
+        self.timestep_limit = 6000
         self.winning_ratio = 0
 
         self._sim_parameters = sim_parameters
@@ -87,8 +93,9 @@ class AtcGym(gym.Env):
             self._airplane.v_min,
             0,
             0,
+            0,
             -180,
-            -180])
+            -180], dtype=np.float32)
         self.normalization_state_max = np.array([
             world_x_length,  # x position in nautical miles
             world_y_length,  # y positon in nautical miles
@@ -96,14 +103,14 @@ class AtcGym(gym.Env):
             360,  # airplane heading, phi in degrees
             self._airplane.v_max - self._airplane.v_min,  # airplane speed, v in knots
             self._airplane.h_max,  # height above the current mva in feet
+            self._airplane.h_max,  # on GP altitude
             self._world_max_distance,  # distance to FAF in nautical miles
             360,  # phi relative to the FAF in degrees (-180, 180)
             360  # phi relative to the runway in degrees (-180, 180)
-        ])
+        ], dtype=np.float32)
 
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
-        self.observation_space = gym.spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1, -1, -1, -1]),
-                                                high=np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]))
+        self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(10,))
 
         self.reward_range = (-3000.0, 23000.0)
 
@@ -161,6 +168,10 @@ class AtcGym(gym.Env):
             reward = 10000 + max((self.timestep_limit - self.timesteps) * 5, 0)
             self.done = True
 
+        if self.timesteps > self.timestep_limit:
+            reward = -200
+            self.done = True
+
         state = self._get_state(mva)
         self.state = state
 
@@ -171,9 +182,7 @@ class AtcGym(gym.Env):
             reward += app_position_reward
             reward += self._reward_approach_angle(self._runway.phi_to_runway,
                                                   self._phi_rel_faf, self._airplane.phi, app_position_reward)
-            reward += self._reward_glideslope(self._d_faf, self._airplane.h,
-                                              self._runway.phi_to_runway, self._phi_rel_faf,
-                                              app_position_reward, self._faf_mva)
+            reward += self._reward_glideslope(self._airplane.h, self._on_gp_altitude, app_position_reward)
 
         if self._sim_parameters.normalize_state:
             state = (state - self.normalization_state_min - 0.5 * self.normalization_state_max) \
@@ -208,27 +217,24 @@ class AtcGym(gym.Env):
         # reward_faf = 1 / np.maximum(np.power(d_faf, faf_power), 1)
         #         reward_app_angle = np.power(np.abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180, 1.5)
         #         return reward_faf * reward_app_angle * 0.8
-        reward_faf = 1.0 - (d_faf/world_max_dist)**faf_power
+        reward_faf = sigmoid_distance_func(d_faf, world_max_dist)
         reward_app_angle = (abs(model.relative_angle(phi_to_runway, phi_rel_to_faf)) / 180.0) ** 1.5
         return reward_faf * reward_app_angle * 0.8
 
     @staticmethod
     @jit(nopython=True)
-    def _reward_glideslope(d_faf, h, phi_to_runway, phi_rel_to_faf, position_factor, faf_altitude):
+    def _reward_glideslope(h, on_gp_altitude, position_factor):
         """
         Calculates a reward based upon the on glideslope performance of the airplane, weighted with the position
         relative to the FAF.
 
         :param d_faf: Distance to the faf, in nm
         :param h: Altitude of the airplane
-        :param phi_to_runway: Approach course/Runway heading
-        :param phi_rel_to_faf: Angle of the airplane to the FAF
         :return: Reward factor
         """
         # base calculation, glideslope of 3 deg np.tan(np.radians(3)) * model.nautical_miles_to_feet
-        on_gp_altitude = 318.4 * d_faf + faf_altitude
-        altitude_diff_factor = 1 - (abs(h - on_gp_altitude) / 40000.0) ** 0.4
-        return altitude_diff_factor * position_factor * 1.2
+        altitude_diff_factor = sigmoid_distance_func(abs(h - on_gp_altitude), 36000)
+        return altitude_diff_factor * position_factor * 0.8
 
     @staticmethod
     @jit(nopython=True)
@@ -251,7 +257,7 @@ class AtcGym(gym.Env):
         plane_to_runway = model.relative_angle(phi_to_runway, phi_plane)
         side = np.sign(model.relative_angle(phi_to_runway, phi_rel_to_faf))
 
-        return reward_model(side * plane_to_runway) * position_factor * 0.8
+        return reward_model(side * plane_to_runway) * position_factor * 1.2
 
     def _get_state(self, mva):
         # observation space: x, y, h, phi, v, h-mva, d_faf, phi_rel_faf, phi_rel_runway
@@ -260,10 +266,20 @@ class AtcGym(gym.Env):
         phi_rel_runway = self._calculate_phi_rel_runway(self._runway.phi_to_runway, self._airplane.phi)
         self._d_faf = self.euclidean_dist(to_faf_x, to_faf_y)
         self._phi_rel_faf = self._calculate_phi_rel_faf(to_faf_x, to_faf_y)
-        state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi,
-                          self._airplane.v, self._airplane.h - mva, self._d_faf, self._phi_rel_faf, phi_rel_runway],
+        self._on_gp_altitude = self._calculate_on_gp_altitude(self._d_faf, self._faf_mva)
+        state = np.array([self._airplane.x, self._airplane.y, self._airplane.h, self._airplane.phi, self._airplane.v,
+                          self._airplane.h - mva,
+                          self._on_gp_altitude,
+                          self._d_faf,
+                          self._phi_rel_faf,
+                          phi_rel_runway],
                          dtype=np.float32)
         return state
+
+    @staticmethod
+    @jit(nopython=True)
+    def _calculate_on_gp_altitude(d_faf, faf_mva):
+        return 318.4 * d_faf + faf_mva - 200
 
     @staticmethod
     @jit(nopython=True)
@@ -285,18 +301,13 @@ class AtcGym(gym.Env):
         reward = 0.0
 
         try:
+            func(action_to_take)
             if not abs(action_to_take - self.last_action[index]) < self._action_discriminator[index]:
-                func(action_to_take)
                 self.actions_taken += 1
                 # give negative reward for telling the airplane to climb again
-                if index == 1:
-                    if action_to_take > self.last_action[1]:
-                        reward -= 2.5
-            else:
-                # avoid that the agent cheats by performing very small actions, below the discriminator
-                func(self.last_action[index])
-                # positive reward for not taking a new action
-                reward += 0.001
+                #if index == 1:
+                #    if action_to_take > self.last_action[1]:
+                #        reward -= 0.5
             self.last_action[index] = action_to_take
         except ValueError:
             # invalid action, outside of permissible range
