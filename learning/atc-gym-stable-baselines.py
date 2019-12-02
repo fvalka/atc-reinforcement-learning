@@ -41,7 +41,11 @@ def learn(model_factory: ModelFactory, multiprocess: bool = True, time_steps: in
 
         if isinstance(model_factory, PPO2ModelFactory):
             fps = tf.Summary(value=[tf.Summary.Value(tag='simulation/fps', simple_value=locals_['fps'])])
+            mean_length = np.mean([info["l"] for info in locals_["ep_infos"]])
+            mean_length_tf = tf.Summary(
+                value=[tf.Summary.Value(tag='simulation/mean_episode_length', simple_value=mean_length)])
             locals_['writer'].add_summary(fps, self_.num_timesteps)
+            locals_['writer'].add_summary(mean_length_tf, self_.num_timesteps)
         return True
 
     def video_trigger(step):
@@ -65,7 +69,6 @@ def learn(model_factory: ModelFactory, multiprocess: bool = True, time_steps: in
     def make_env():
         log_dir_single = "%s/%s/" % (log_dir, uuid.uuid4())
         env = gym.make('AtcEnv-v0')
-        env = TimeLimit(env, 4000)
         os.makedirs(log_dir_single, exist_ok=True)
         env = Monitor(env, log_dir_single, allow_early_resets=True)
         return env
@@ -109,11 +112,11 @@ class PPO2ModelFactory(ModelFactory):
         self.hyperparams = {"n_steps": 1024,
                             "nminibatches": 32,
                             "cliprange": 0.4,
-                            "gamma": 0.993,
+                            "gamma": 0.996,
                             "lam": 0.95,
                             "learning_rate": LinearSchedule(1.0, initial_p=0.0002, final_p=0.001).value,
                             "noptepochs": 4,
-                            "ent_coef": 0.007}
+                            "ent_coef": 0.002}
 
     def build(self, env, log_dir):
         return PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir, **self.hyperparams)
@@ -140,4 +143,4 @@ class SACModelFactory(ModelFactory):
 
 if __name__ == '__main__':
     freeze_support()
-    learn(PPO2ModelFactory(), time_steps=int(24e6), multiprocess=True, record_video=False)
+    learn(PPO2ModelFactory(), time_steps=int(7e6), multiprocess=True, record_video=False)
