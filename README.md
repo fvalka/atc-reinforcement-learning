@@ -9,6 +9,13 @@ The goal is to train a neural network to perform basic Air Traffic Control Tasks
 This approach could improve throughput of a sector, noise abatement and increase efficiency through continuous 
 climb and descend profiles, which for example could save 1-2% of fuel.[2][2]
 
+## Presentation
+A presentation was held about this project, the 
+[presentation](https://zenodo.org/record/3846007)
+and a 
+[demo video](https://youtu.be/XfVRSVnItYo) of the results can be downloaded and cited here:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3846007.svg)](https://doi.org/10.5281/zenodo.3846007)
+
 ## Approach ATC Task
 Air traffic control (ATC) is a service provided by ground-based air traffic controllers who direct aircraft on the 
 ground and through controlled airspace, and can provide advisory services to aircraft in non-controlled airspace. [1][1]
