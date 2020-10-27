@@ -19,7 +19,7 @@ codecov==2.0.15
 colorama==0.4.1
 colorlog==4.0.2
 coverage==4.5.4
-cryptography==2.8
+cryptography==3.2
 cycler==0.10.0
 Cython==0.29.14
 decorator==4.4.1
