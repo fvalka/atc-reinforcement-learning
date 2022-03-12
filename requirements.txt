@@ -76,7 +76,7 @@ pandocfilters==1.4.2
 parso==0.5.1
 pbr==5.4.3
 pickleshare==0.7.5
-Pillow==6.2.1
+Pillow==9.0.1
 pluggy==0.13.0
 prettytable==0.7.2
 progressbar2==3.47.0
