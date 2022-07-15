@@ -15,7 +15,7 @@ Click==7.0
 cliff==2.16.0
 cloudpickle==1.2.2
 cmd2==0.8.9
-codecov==2.0.15
+codecov==2.0.16
 colorama==0.4.1
 colorlog==4.0.2
 coverage==4.5.4
